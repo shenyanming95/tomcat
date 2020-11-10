@@ -124,9 +124,6 @@ public class PoolableConnection extends DelegatingConnection<Connection> impleme
     protected void passivate() throws SQLException {
         super.passivate();
         setClosedInternal(true);
-        if (getDelegateInternal() instanceof PoolingConnection) {
-            ((PoolingConnection) getDelegateInternal()).connectionReturnedToPool();
-        }
     }
 
     /**

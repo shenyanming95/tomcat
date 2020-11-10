@@ -372,8 +372,7 @@ public class StandardContext extends ContainerBase
     private final ErrorPageSupport errorPageSupport = new ErrorPageSupport();
 
     /**
-     * The set of filter configurations (and associated filter instances) we
-     * have initialized, keyed by filter name.
+     * 已初始化的一组过滤器Filter配置, 读取web.xml获取
      */
     private Map<String, ApplicationFilterConfig> filterConfigs = new HashMap<>();
 
@@ -827,10 +826,6 @@ public class StandardContext extends ContainerBase
 
     private boolean createUploadTargets = false;
 
-
-    private boolean parallelAnnotationScanning = false;
-
-    private boolean useBloomFilterForArchives = false;
 
     // ----------------------------------------------------- Context Properties
 
@@ -1405,40 +1400,6 @@ public class StandardContext extends ContainerBase
                                    oldAntiResourceLocking,
                                    this.antiResourceLocking);
 
-    }
-
-
-    @Override
-    public boolean getUseBloomFilterForArchives() {
-        return this.useBloomFilterForArchives;
-    }
-
-
-    @Override
-    public void setUseBloomFilterForArchives(boolean useBloomFilterForArchives) {
-
-        boolean oldUseBloomFilterForArchives = this.useBloomFilterForArchives;
-        this.useBloomFilterForArchives = useBloomFilterForArchives;
-        support.firePropertyChange("useBloomFilterForArchives", oldUseBloomFilterForArchives,
-                this.useBloomFilterForArchives);
-
-    }
-
-
-    @Override
-    public void setParallelAnnotationScanning(boolean parallelAnnotationScanning) {
-
-        boolean oldParallelAnnotationScanning = this.parallelAnnotationScanning;
-        this.parallelAnnotationScanning = parallelAnnotationScanning;
-        support.firePropertyChange("parallelAnnotationScanning", oldParallelAnnotationScanning,
-                this.parallelAnnotationScanning);
-
-    }
-
-
-    @Override
-    public boolean isParallelAnnotationScanning() {
-        return this.parallelAnnotationScanning;
     }
 
 
@@ -2131,7 +2092,7 @@ public class StandardContext extends ContainerBase
         if (path == null || path.equals("/")) {
             invalid = true;
             this.path = "";
-        } else if (path.isEmpty() || path.startsWith("/")) {
+        } else if ("".equals(path) || path.startsWith("/")) {
             this.path = path;
         } else {
             invalid = true;
@@ -4947,7 +4908,9 @@ public class StandardContext extends ContainerBase
             namingResources.start();
         }
 
-        // Post work directory
+        // 发布工作目录, Context的父容器Host的默认工作目录是webapps,
+        // 我们可以将war包放到/webapps下, 这样tomcat就会解析到, 然后
+        // 将其映射成一个Context
         postWorkDirectory();
 
         // Add missing components as necessary

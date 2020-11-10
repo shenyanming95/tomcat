@@ -295,14 +295,20 @@ public class CoyoteAdapter implements Adapter {
         return success;
     }
 
-
+    /**
+     *
+     *
+     * @param req The request object
+     * @param res The response object
+     *
+     */
     @Override
     public void service(org.apache.coyote.Request req, org.apache.coyote.Response res)
             throws Exception {
-
+        // 从 org.apache.coyote.Request 获取 org.apache.catalina.connector.Request, 如果么有就创建它, 然后关联起来
+        // 从 org.apache.coyote.Response 获取 org.apache.catalina.connector.Response, 如果么有就创建它, 然后关联起来
         Request request = (Request) req.getNote(ADAPTER_NOTES);
         Response response = (Response) res.getNote(ADAPTER_NOTES);
-
         if (request == null) {
             // Create objects
             request = connector.createRequest();
@@ -325,24 +331,26 @@ public class CoyoteAdapter implements Adapter {
         if (connector.getXpoweredBy()) {
             response.addHeader("X-Powered-By", POWERED_BY);
         }
-
+        // 标志位, 用于下面记录日志
         boolean async = false;
         boolean postParseSuccess = false;
-
+        // 设置当前工作线程
         req.getRequestProcessor().setWorkerThreadName(THREAD_NAME.get());
-
         try {
-            // Parse and set Catalina and configuration specific
-            // request parameters
+            // 解析并设置Catalina和特定于配置的请求参数, 然后有一个很重要的点:
+            // 该Request给哪个Host处理, 在下面这个方法就已经确定了, 通过解析请求
+            // 的URI, 与Mapping映射得出.
             postParseSuccess = postParseRequest(req, request, res, response);
             if (postParseSuccess) {
                 //check valves if we support async
-                request.setAsyncSupported(
-                        connector.getService().getContainer().getPipeline().isAsyncSupported());
-                // Calling the container
-                connector.getService().getContainer().getPipeline().getFirst().invoke(
-                        request, response);
+                request.setAsyncSupported(connector.getService().getContainer().getPipeline().isAsyncSupported());
+                // 从这里开始进入Servlet容器的运行逻辑~
+                // 获取 Engine 的 pipeline, 将request和response依次放入到Valve中.
+                // 可以保证每一个容器的pipeline都有一个basic valve, 它是用来调用子容器的pipeline,
+                // 默认：Engine的basic valve为StandardEngineValve
+                connector.getService().getContainer().getPipeline().getFirst().invoke(request, response);
             }
+            // 如果当前是异步Servlet
             if (request.isAsync()) {
                 async = true;
                 ReadListener readListener = req.getReadListener();
@@ -359,10 +367,7 @@ public class CoyoteAdapter implements Adapter {
                         request.getContext().unbind(false, oldCL);
                     }
                 }
-
-                Throwable throwable =
-                        (Throwable) request.getAttribute(RequestDispatcher.ERROR_EXCEPTION);
-
+                Throwable throwable = (Throwable) request.getAttribute(RequestDispatcher.ERROR_EXCEPTION);
                 // If an async request was started, is not going to end once
                 // this container thread finishes and an error occurred, trigger
                 // the async error process
@@ -370,6 +375,7 @@ public class CoyoteAdapter implements Adapter {
                     request.getAsyncContextInternal().setErrorState(throwable, true);
                 }
             } else {
+                // 如果是同步Servlet, 刷新Request和Response, 就会将响应写回客户端, 同时清理Request和Response资源
                 request.finishRequest();
                 response.finishResponse();
             }
@@ -700,11 +706,11 @@ public class CoyoteAdapter implements Adapter {
             // because no ROOT context has been deployed or the URI was invalid
             // so no context could be mapped.
             if (request.getContext() == null) {
+                // Don't overwrite an existing error
+                if (!response.isError()) {
+                    response.sendError(404);
+                }
                 // Allow processing to continue.
-                // If present, the rewrite Valve may rewrite this to a valid
-                // request.
-                // The StandardEngineValve will handle the case of a missing
-                // Host and the StandardHostValve the case of a missing Context.
                 // If present, the error reporting valve will provide a response
                 // body.
                 return true;
@@ -1151,12 +1157,6 @@ public class CoyoteAdapter implements Adapter {
         int pos = 0;
         int index = 0;
 
-
-        // The URL must start with '/' (or '\' that will be replaced soon)
-        if (b[start] != (byte) '/' && b[start] != (byte) '\\') {
-            return false;
-        }
-
         // Replace '\' with '/'
         // Check for null byte
         for (pos = start; pos < end; pos++) {
@@ -1166,9 +1166,15 @@ public class CoyoteAdapter implements Adapter {
                 } else {
                     return false;
                 }
-            } else if (b[pos] == (byte) 0) {
+            }
+            if (b[pos] == (byte) 0) {
                 return false;
             }
+        }
+
+        // The URL must start with '/'
+        if (b[start] != (byte) '/') {
+            return false;
         }
 
         // Replace "//" with "/"

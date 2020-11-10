@@ -80,8 +80,8 @@
       type="java.lang.String"
       writeable="false"/>
     <attribute
-      name="counterNoStateTransferred"
-      description="Count the failed session transfers noStateTransferred"
+      name="counterNoStateTransfered"
+      description="Count the failed session transfers noStateTransfered"
       type="int"
       writeable="false"/>
     <attribute
@@ -258,7 +258,7 @@
       type="java.lang.String"
       writeable="false"/>
     <attribute
-      name="stateTransferred"
+      name="stateTransfered"
       description="Is session state transferred complete? "
       type="boolean"/>
     <attribute

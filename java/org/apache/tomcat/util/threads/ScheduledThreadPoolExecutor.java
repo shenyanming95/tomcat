@@ -27,8 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Class which wraps a ScheduledExecutorService, while preventing
- * lifecycle and configuration operations.
+ * tomcat 对{@link ScheduledExecutorService}的包装类(装饰者模式), 以防止线程池的生命周期和重新配置的API调用
  */
 public class ScheduledThreadPoolExecutor implements ScheduledExecutorService {
 
@@ -42,12 +41,18 @@ public class ScheduledThreadPoolExecutor implements ScheduledExecutorService {
         this.executor = executor;
     }
 
+    /**
+     * tomcat的线程池包装类, 去掉了{@link ScheduledExecutorService}的停止逻辑
+     */
     @Override
     public void shutdown() {
         // Do nothing
     }
 
 
+    /**
+     * tomcat的线程池包装类, 去掉了{@link ScheduledExecutorService}的停止逻辑
+     */
     @Override
     public List<Runnable> shutdownNow() {
         return null;

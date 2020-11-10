@@ -27,8 +27,5 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ManagedBean {
-    /**
-     * @return Name of the managed bean
-     */
     String value() default "";
 }

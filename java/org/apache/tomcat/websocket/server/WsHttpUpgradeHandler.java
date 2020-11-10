@@ -30,7 +30,6 @@ import javax.websocket.Extension;
 import javax.websocket.server.ServerEndpointConfig;
 
 import org.apache.coyote.http11.upgrade.InternalHttpUpgradeHandler;
-import org.apache.coyote.http11.upgrade.UpgradeInfo;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.net.AbstractEndpoint.Handler.SocketState;
@@ -53,7 +52,6 @@ public class WsHttpUpgradeHandler implements InternalHttpUpgradeHandler {
     private final ClassLoader applicationClassLoader;
 
     private SocketWrapperBase<?> socketWrapper;
-    private UpgradeInfo upgradeInfo = new UpgradeInfo();
 
     private Endpoint ep;
     private ServerEndpointConfig serverEndpointConfig;
@@ -119,7 +117,7 @@ public class WsHttpUpgradeHandler implements InternalHttpUpgradeHandler {
         ClassLoader cl = t.getContextClassLoader();
         t.setContextClassLoader(applicationClassLoader);
         try {
-            wsRemoteEndpointServer = new WsRemoteEndpointImplServer(socketWrapper, upgradeInfo, webSocketContainer);
+            wsRemoteEndpointServer = new WsRemoteEndpointImplServer(socketWrapper, webSocketContainer);
             wsSession = new WsSession(ep, wsRemoteEndpointServer,
                     webSocketContainer, handshakeRequest.getRequestURI(),
                     handshakeRequest.getParameterMap(),
@@ -127,7 +125,7 @@ public class WsHttpUpgradeHandler implements InternalHttpUpgradeHandler {
                     handshakeRequest.getUserPrincipal(), httpSessionId,
                     negotiatedExtensions, subProtocol, pathParameters, secure,
                     serverEndpointConfig);
-            wsFrame = new WsFrameServer(socketWrapper, upgradeInfo, wsSession, transformation,
+            wsFrame = new WsFrameServer(socketWrapper, wsSession, transformation,
                     applicationClassLoader);
             // WsFrame adds the necessary final transformations. Copy the
             // completed transformation chain to the remote end point.
@@ -139,12 +137,6 @@ public class WsHttpUpgradeHandler implements InternalHttpUpgradeHandler {
         } finally {
             t.setContextClassLoader(cl);
         }
-    }
-
-
-    @Override
-    public UpgradeInfo getUpgradeInfo() {
-        return upgradeInfo;
     }
 
 

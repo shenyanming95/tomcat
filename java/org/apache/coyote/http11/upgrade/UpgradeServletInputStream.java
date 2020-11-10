@@ -37,7 +37,6 @@ public class UpgradeServletInputStream extends ServletInputStream {
 
     private final UpgradeProcessorBase processor;
     private final SocketWrapperBase<?> socketWrapper;
-    private final UpgradeInfo upgradeInfo;
 
     private volatile boolean closed = false;
     private volatile boolean eof = false;
@@ -46,11 +45,10 @@ public class UpgradeServletInputStream extends ServletInputStream {
     private volatile ReadListener listener = null;
 
 
-    public UpgradeServletInputStream(UpgradeProcessorBase processor, SocketWrapperBase<?> socketWrapper,
-            UpgradeInfo upgradeInfo) {
+    public UpgradeServletInputStream(UpgradeProcessorBase processor,
+            SocketWrapperBase<?> socketWrapper) {
         this.processor = processor;
         this.socketWrapper = socketWrapper;
-        this.upgradeInfo = upgradeInfo;
     }
 
 
@@ -141,13 +139,7 @@ public class UpgradeServletInputStream extends ServletInputStream {
                 break;
             }
         }
-
-        if (count > 0) {
-            upgradeInfo.addBytesReceived(count);
-            return count;
-        } else {
-            return -1;
-        }
+        return count > 0 ? count : -1;
     }
 
 
@@ -159,8 +151,6 @@ public class UpgradeServletInputStream extends ServletInputStream {
             int result = socketWrapper.read(listener == null, b, off, len);
             if (result == -1) {
                 eof = true;
-            } else {
-                upgradeInfo.addBytesReceived(result);
             }
             return result;
         } catch (IOException ioe) {
@@ -207,7 +197,6 @@ public class UpgradeServletInputStream extends ServletInputStream {
             eof = true;
             return -1;
         } else {
-            upgradeInfo.addBytesReceived(1);
             return b[0] & 0xFF;
         }
     }

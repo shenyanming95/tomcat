@@ -192,7 +192,7 @@ public abstract class SSLUtilBase implements SSLUtil {
                 // Some key store types (e.g. hardware) expect the InputStream
                 // to be null
                 if(!("PKCS11".equalsIgnoreCase(type) ||
-                        path.isEmpty()) ||
+                        "".equalsIgnoreCase(path)) ||
                         "NONE".equalsIgnoreCase(path)) {
                     istream = ConfigFileLoader.getSource().getResource(path).getInputStream();
                 }
@@ -296,16 +296,6 @@ public abstract class SSLUtilBase implements SSLUtil {
 
         char[] keyPassArray = keyPass.toCharArray();
 
-        KeyManagerFactory kmf = KeyManagerFactory.getInstance(algorithm);
-        if (kmf.getProvider().getInfo().indexOf("FIPS") != -1) {
-            // FIPS doesn't like ANY wrapping nor key manipulation.
-            if (keyAlias != null) {
-                log.warn(sm.getString("sslUtilBase.aliasIgnored", keyAlias));
-            }
-            kmf.init(ksUsed, keyPassArray);
-            return kmf.getKeyManagers();
-        }
-
         if (ks == null) {
             if (certificate.getCertificateFile() == null) {
                 throw new IOException(sm.getString("sslUtilBase.noCertFile"));
@@ -368,6 +358,7 @@ public abstract class SSLUtilBase implements SSLUtil {
         }
 
 
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(algorithm);
         kmf.init(ksUsed, keyPassArray);
 
         KeyManager[] kms = kmf.getKeyManagers();

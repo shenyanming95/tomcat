@@ -113,7 +113,7 @@ public abstract class WsFrameBase {
 
     protected void processInputBuffer() throws IOException {
         while (!isSuspended()) {
-            wsSession.updateLastActiveRead();
+            wsSession.updateLastActive();
             if (state == State.NEW_FRAME) {
                 if (!processInitialHeader()) {
                     break;
@@ -307,21 +307,8 @@ public abstract class WsFrameBase {
                 result = processDataBinary();
             }
         }
-        if (result) {
-            updateStats(payloadLength);
-        }
         checkRoomPayload();
         return result;
-    }
-
-
-    /**
-     * Hook for updating server side statistics. Called on every frame received.
-     *
-     * @param payloadLength Size of message payload
-     */
-    protected void updateStats(long payloadLength) {
-        // NO-OP by default
     }
 
 

@@ -51,7 +51,6 @@ import org.apache.catalina.Session;
 import org.apache.catalina.security.SecurityUtil;
 import org.apache.catalina.util.SessionConfig;
 import org.apache.coyote.ActionCode;
-import org.apache.coyote.ContinueResponseTiming;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.buf.CharChunk;
@@ -1211,26 +1210,9 @@ public class Response implements HttpServletResponse {
      * Send an acknowledgement of a request.
      *
      * @exception IOException if an input/output error occurs
-     *
-     * @deprecated Unused. Will be removed in Tomcat 10.
-     *             Use {@link #sendAcknowledgement(ContinueResponseTiming)}.
      */
-    @Deprecated
-    public void sendAcknowledgement() throws IOException {
-        sendAcknowledgement(ContinueResponseTiming.ALWAYS);
-    }
-
-
-    /**
-     * Send an acknowledgement of a request.
-     *
-     * @param continueResponseTiming Indicates when the request for the ACK
-     *                               originated so it can be compared with the
-     *                               configured timing for ACK responses.
-     *
-     * @exception IOException if an input/output error occurs
-     */
-    public void sendAcknowledgement(ContinueResponseTiming continueResponseTiming) throws IOException {
+    public void sendAcknowledgement()
+        throws IOException {
 
         if (isCommitted()) {
             return;
@@ -1241,7 +1223,7 @@ public class Response implements HttpServletResponse {
             return;
         }
 
-        getCoyoteResponse().action(ActionCode.ACK, continueResponseTiming);
+        getCoyoteResponse().action(ActionCode.ACK, null);
     }
 
 
@@ -1658,7 +1640,7 @@ public class Response implements HttpServletResponse {
                     if (SecurityUtil.isPackageProtectionEnabled() ){
                         try{
                             encodedURI = AccessController.doPrivileged(
-                                    new PrivilegedEncodeUrl(urlEncoder, relativePath, pos));
+                                    new PrivilgedEncodeUrl(urlEncoder, relativePath, pos));
                         } catch (PrivilegedActionException pae){
                             IllegalArgumentException iae =
                                 new IllegalArgumentException(location);
@@ -1832,10 +1814,10 @@ public class Response implements HttpServletResponse {
         }
         StringBuilder sb = new StringBuilder(path);
         if( sb.length() > 0 ) { // jsessionid can't be first.
-            sb.append(';');
+            sb.append(";");
             sb.append(SessionConfig.getSessionUriParamName(
                     request.getContext()));
-            sb.append('=');
+            sb.append("=");
             sb.append(sessionId);
         }
         sb.append(anchor);
@@ -1885,13 +1867,13 @@ public class Response implements HttpServletResponse {
     }
 
 
-    private static class PrivilegedEncodeUrl implements PrivilegedExceptionAction<CharChunk> {
+    private static class PrivilgedEncodeUrl implements PrivilegedExceptionAction<CharChunk> {
 
         private final UEncoder urlEncoder;
         private final String relativePath;
         private final int end;
 
-        public PrivilegedEncodeUrl(UEncoder urlEncoder, String relativePath, int end) {
+        public PrivilgedEncodeUrl(UEncoder urlEncoder, String relativePath, int end) {
             this.urlEncoder = urlEncoder;
             this.relativePath = relativePath;
             this.end = end;

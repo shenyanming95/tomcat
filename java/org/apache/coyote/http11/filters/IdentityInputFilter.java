@@ -176,8 +176,7 @@ public class IdentityInputFilter implements InputFilter, ApplicationBufferHandle
      */
     @Override
     public int available() {
-        // No data buffered here. Try the next filter in the chain.
-        return buffer.available();
+        return 0;
     }
 
 

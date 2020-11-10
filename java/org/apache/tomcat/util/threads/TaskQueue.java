@@ -35,13 +35,12 @@ public class TaskQueue extends LinkedBlockingQueue<Runnable> {
     private static final long serialVersionUID = 1L;
     protected static final StringManager sm = StringManager
             .getManager("org.apache.tomcat.util.threads.res");
-    private static final int DEFAULT_FORCED_REMAINING_CAPACITY = -1;
 
     private transient volatile ThreadPoolExecutor parent = null;
 
     // No need to be volatile. This is written and read in a single thread
-    // (when stopping a context and firing the listeners)
-    private int forcedRemainingCapacity = -1;
+    // (when stopping a context and firing the  listeners)
+    private Integer forcedRemainingCapacity = null;
 
     public TaskQueue() {
         super();
@@ -110,22 +109,18 @@ public class TaskQueue extends LinkedBlockingQueue<Runnable> {
 
     @Override
     public int remainingCapacity() {
-        if (forcedRemainingCapacity > DEFAULT_FORCED_REMAINING_CAPACITY) {
+        if (forcedRemainingCapacity != null) {
             // ThreadPoolExecutor.setCorePoolSize checks that
             // remainingCapacity==0 to allow to interrupt idle threads
             // I don't see why, but this hack allows to conform to this
             // "requirement"
-            return forcedRemainingCapacity;
+            return forcedRemainingCapacity.intValue();
         }
         return super.remainingCapacity();
     }
 
-    public void setForcedRemainingCapacity(int forcedRemainingCapacity) {
+    public void setForcedRemainingCapacity(Integer forcedRemainingCapacity) {
         this.forcedRemainingCapacity = forcedRemainingCapacity;
-    }
-
-    void resetForcedRemainingCapacity() {
-        this.forcedRemainingCapacity = DEFAULT_FORCED_REMAINING_CAPACITY;
     }
 
 }

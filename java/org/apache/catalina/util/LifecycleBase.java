@@ -125,15 +125,23 @@ public abstract class LifecycleBase implements Lifecycle {
     }
 
 
+    /**
+     * Tomcat中大部分生命周期组件的实现类, 都会继承自这个类. 抽象父类会在这边做组件的状态检查工作,
+     * 同时回调生命周期事件的监听器, 最后调用具体子类组件的 initInternal() 完成真正的初始化逻辑.
+     */
     @Override
     public final synchronized void init() throws LifecycleException {
+        // 只有组件状态为 LifecycleState.NEW 时, 才能初始化
         if (!state.equals(LifecycleState.NEW)) {
             invalidTransition(Lifecycle.BEFORE_INIT_EVENT);
         }
 
         try {
+            // 生命周期监听器 org.apache.catalina.LifecycleEvent, 初始化前事件回调
             setStateInternal(LifecycleState.INITIALIZING, null, false);
+            // 子类组件真正执行初始化的逻辑
             initInternal();
+            // 生命周期监听器 org.apache.catalina.LifecycleEvent, 初始化后事件回调
             setStateInternal(LifecycleState.INITIALIZED, null, false);
         } catch (Throwable t) {
             handleSubClassException(t, "lifecycleBase.initFail", toString());
@@ -155,31 +163,29 @@ public abstract class LifecycleBase implements Lifecycle {
      */
     @Override
     public final synchronized void start() throws LifecycleException {
-
-        if (LifecycleState.STARTING_PREP.equals(state) || LifecycleState.STARTING.equals(state) ||
-                LifecycleState.STARTED.equals(state)) {
-
+        // 日志相关
+        if (LifecycleState.STARTING_PREP.equals(state) || LifecycleState.STARTING.equals(state) || LifecycleState.STARTED.equals(state)) {
             if (log.isDebugEnabled()) {
                 Exception e = new LifecycleException();
                 log.debug(sm.getString("lifecycleBase.alreadyStarted", toString()), e);
             } else if (log.isInfoEnabled()) {
                 log.info(sm.getString("lifecycleBase.alreadyStarted", toString()));
             }
-
             return;
         }
-
         if (state.equals(LifecycleState.NEW)) {
+            // 如果组件状态为NEW, 即刚创建出来, 则进行初始化
             init();
         } else if (state.equals(LifecycleState.FAILED)) {
+            // 如果组件初始化失败, 则停止
             stop();
-        } else if (!state.equals(LifecycleState.INITIALIZED) &&
-                !state.equals(LifecycleState.STOPPED)) {
+        } else if (!state.equals(LifecycleState.INITIALIZED) && !state.equals(LifecycleState.STOPPED)) {
             invalidTransition(Lifecycle.BEFORE_START_EVENT);
         }
-
         try {
+            // 监听事件回调
             setStateInternal(LifecycleState.STARTING_PREP, null, false);
+            // 真正启动逻辑, 从Server开始
             startInternal();
             if (state.equals(LifecycleState.FAILED)) {
                 // This is a 'controlled' failure. The component put itself into the
@@ -190,6 +196,7 @@ public abstract class LifecycleBase implements Lifecycle {
                 // doing what they are supposed to.
                 invalidTransition(Lifecycle.AFTER_START_EVENT);
             } else {
+                // 启动成功后事件回调
                 setStateInternal(LifecycleState.STARTED, null, false);
             }
         } catch (Throwable t) {

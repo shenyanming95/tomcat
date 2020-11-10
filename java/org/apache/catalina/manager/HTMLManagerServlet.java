@@ -348,16 +348,13 @@ public final class HTMLManagerServlet extends ManagerServlet {
 
         PrintWriter writer = response.getWriter();
 
+        // HTML Header Section
+        writer.print(Constants.HTML_HEADER_SECTION);
+
+        // Body Header Section
         Object[] args = new Object[2];
         args[0] = request.getContextPath();
         args[1] = smClient.getString("htmlManagerServlet.title");
-
-        // HTML Header Section
-        writer.print(MessageFormat.format(
-            Constants.HTML_HEADER_SECTION, args
-        ));
-
-        // Body Header Section
         writer.print(MessageFormat.format
                      (Constants.BODY_HEADER_SECTION, args));
 
@@ -443,11 +440,10 @@ public final class HTMLManagerServlet extends ManagerServlet {
                 StringBuilder tmp = new StringBuilder();
                 tmp.append("path=");
                 tmp.append(URLEncoder.DEFAULT.encode(displayPath, StandardCharsets.UTF_8));
-                final String webappVersion = ctxt.getWebappVersion();
-                if (webappVersion != null && webappVersion.length() > 0) {
+                if (ctxt.getWebappVersion().length() > 0) {
                     tmp.append("&version=");
                     tmp.append(URLEncoder.DEFAULT.encode(
-                            webappVersion, StandardCharsets.UTF_8));
+                            ctxt.getWebappVersion(), StandardCharsets.UTF_8));
                 }
                 String pathVersion = tmp.toString();
 
@@ -464,10 +460,10 @@ public final class HTMLManagerServlet extends ManagerServlet {
                         + URLEncoder.DEFAULT.encode(contextPath + "/", StandardCharsets.UTF_8)
                         + "\" " + Constants.REL_EXTERNAL + ">"
                         + Escape.htmlElementContent(displayPath) + "</a>";
-                if (webappVersion == null || webappVersion.isEmpty()) {
+                if ("".equals(ctxt.getWebappVersion())) {
                     args[1] = noVersion;
                 } else {
-                    args[1] = Escape.htmlElementContent(webappVersion);
+                    args[1] = Escape.htmlElementContent(ctxt.getWebappVersion());
                 }
                 if (ctxt.getDisplayName() == null) {
                     args[2] = "&nbsp;";

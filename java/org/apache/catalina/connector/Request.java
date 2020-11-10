@@ -888,7 +888,7 @@ public class Request implements HttpServletRequest {
         if (attr != null) {
             return attr;
         }
-        if (!sslAttributesParsed && TLSUtil.isTLSRequestAttribute(name)) {
+        if (TLSUtil.isTLSRequestAttribute(name)) {
             coyoteRequest.action(ActionCode.REQ_SSL_ATTRIBUTE, coyoteRequest);
             attr = coyoteRequest.getAttribute(Globals.CERTIFICATES_ATTR);
             if (attr != null) {
@@ -1685,21 +1685,23 @@ public class Request implements HttpServletRequest {
     public AsyncContext startAsync(ServletRequest request,
             ServletResponse response) {
         if (!isAsyncSupported()) {
-            IllegalStateException ise =
-                    new IllegalStateException(sm.getString("request.asyncNotSupported"));
+            // Servlet自身不支持异步
+            IllegalStateException ise = new IllegalStateException(sm.getString("request.asyncNotSupported"));
             log.warn(sm.getString("coyoteRequest.noAsync",
                     StringUtils.join(getNonAsyncClassNames())), ise);
             throw ise;
         }
 
+        // 创建异步上下文
         if (asyncContext == null) {
             asyncContext = new AsyncContextImpl(this);
         }
-
+        // 设置监听器, 设置回调方法, 开启这个异步上下文
         asyncContext.setStarted(getContext(), request, response,
                 request==getRequest() && response==getResponse().getResponse());
+        // 设置超时时间
         asyncContext.setTimeout(getConnector().getAsyncTimeout());
-
+        // 将异步上下文返回
         return asyncContext;
     }
 
@@ -2049,7 +2051,7 @@ public class Request implements HttpServletRequest {
             throw new ServletException(e);
         }
         UpgradeToken upgradeToken = new UpgradeToken(handler,
-                getContext(), instanceManager, response.getHeader("upgrade"));
+                getContext(), instanceManager);
 
         coyoteRequest.action(ActionCode.UPGRADE, upgradeToken);
 

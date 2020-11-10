@@ -104,26 +104,20 @@ final class StandardHostValve extends ValveBase {
      * @exception ServletException if a servlet error occurred
      */
     @Override
-    public final void invoke(Request request, Response response)
-        throws IOException, ServletException {
-
-        // Select the Context to be used for this Request
+    public final void invoke(Request request, Response response) throws IOException, ServletException {
+        // 从Request中回去需要处理的Context组件
         Context context = request.getContext();
         if (context == null) {
-            // Don't overwrite an existing error
-            if (!response.isError()) {
-                response.sendError(404);
-            }
             return;
         }
-
+        // 设置是否支持异步支持
         if (request.isAsyncSupported()) {
             request.setAsyncSupported(context.getPipeline().isAsyncSupported());
         }
-
         boolean asyncAtStart = request.isAsync();
-
         try {
+            // 每一个Context有自己的类加载器, 主要是为了不同的web应用都有自己的jar依赖,
+            // 防止这些jar依赖混乱掉.
             context.bind(Globals.IS_SECURITY_ENABLED, MY_CLASSLOADER);
 
             if (!asyncAtStart && !context.fireRequestInitEvent(request.getRequest())) {
@@ -140,6 +134,7 @@ final class StandardHostValve extends ValveBase {
             // application for processing.
             try {
                 if (!response.isErrorReportRequired()) {
+                    // 获取 StandardContext 的 pipeline,
                     context.getPipeline().getFirst().invoke(request, response);
                 }
             } catch (Throwable t) {

@@ -123,7 +123,9 @@ public class AprEndpoint extends AbstractEndpoint<Long,Long> implements SNICallB
 
 
     /**
-     * Defer accept.
+     * 对应的是 TCP 协议中的TCP_DEFER_ACCEPT，设置这个参数后，当 TCP 客户端有新的连接请求到达时，
+     * TCP 服务端先不建立连接，而是会等待，直到客户端有请求数据发过来时再建立连接。这样的好处是服务端不需要用
+     * Selector 去反复查询请求数据是否就绪
      */
     protected boolean deferAccept = true;
     public void setDeferAccept(boolean deferAccept) { this.deferAccept = deferAccept; }
@@ -486,13 +488,24 @@ public class AprEndpoint extends AbstractEndpoint<Long,Long> implements SNICallB
         }
         if (running) {
             running = false;
-            acceptor.stop();
             poller.stop();
             for (SocketWrapperBase<Long> socketWrapper : connections.values()) {
                 socketWrapper.close();
             }
-            if (acceptor.getState() != AcceptorState.ENDED && !getBindOnInit()) {
-                log.warn(sm.getString("endpoint.warn.unlockAcceptorFailed", acceptor.getThreadName()));
+            long waitLeft = 10000;
+            while (waitLeft > 0 &&
+                    acceptor.getState() != AcceptorState.ENDED &&
+                    serverSock != 0) {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    // Ignore
+                }
+                waitLeft -= 50;
+            }
+            if (waitLeft == 0) {
+                log.warn(sm.getString("endpoint.warn.unlockAcceptorFailed",
+                        acceptor.getThreadName()));
                 // If the Acceptor is still running force
                 // the hard socket close.
                 if (serverSock != 0) {
@@ -711,11 +724,6 @@ public class AprEndpoint extends AbstractEndpoint<Long,Long> implements SNICallB
      */
     protected boolean processSocket(long socket, SocketEvent event) {
         SocketWrapperBase<Long> socketWrapper = connections.get(Long.valueOf(socket));
-        if (socketWrapper == null) {
-            // Socket probably closed from another thread. Triggering another
-            // close in case won't cause an issue.
-            return false;
-        }
         if (event == SocketEvent.OPEN_READ && socketWrapper.readOperation != null) {
             return socketWrapper.readOperation.process();
         } else if (event == SocketEvent.OPEN_WRITE && socketWrapper.writeOperation != null) {
@@ -1239,15 +1247,15 @@ public class AprEndpoint extends AbstractEndpoint<Long,Long> implements SNICallB
          */
         @Override
         public String toString() {
-            StringBuilder buf = new StringBuilder();
+            StringBuffer buf = new StringBuffer();
             buf.append("Poller");
             long[] res = new long[pollerSize * 2];
             int count = Poll.pollset(aprPoller, res);
             buf.append(" [ ");
             for (int j = 0; j < count; j++) {
-                buf.append(desc[2*j+1]).append(' ');
+                buf.append(desc[2*j+1]).append(" ");
             }
-            buf.append(']');
+            buf.append("]");
             return buf.toString();
         }
 
@@ -1674,7 +1682,7 @@ public class AprEndpoint extends AbstractEndpoint<Long,Long> implements SNICallB
          * will be handled asynchronously inside the kernel. As a result,
          * the poller will never be used.
          *
-         * @param data containing the reference to the data which should be sent
+         * @param data containing the reference to the data which should be snet
          * @return true if all the data has been sent right away, and false
          *              otherwise
          */

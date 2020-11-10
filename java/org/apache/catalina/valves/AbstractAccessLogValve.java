@@ -836,7 +836,7 @@ public abstract class AbstractAccessLogValve extends ValveBase implements Access
             if(info != null) {
                 buf.append(info.getWorkerThreadName());
             } else {
-                buf.append('-');
+                buf.append("-");
             }
         }
     }
@@ -1030,7 +1030,7 @@ public abstract class AbstractAccessLogValve extends ValveBase implements Access
          * formatting of SimpleDateFormat by our own handling
          */
         private static final String msecPattern = "{#}";
-        private static final String tripleMsecPattern =
+        private static final String trippleMsecPattern =
             msecPattern + msecPattern + msecPattern;
 
         /* Our format description string, null if CLF */
@@ -1149,17 +1149,17 @@ public abstract class AbstractAccessLogValve extends ValveBase implements Access
                 String temp = localDateCache.get().getFormat(format, locale, timestamp);
                 if (usesMsecs) {
                     frac = timestamp % 1000;
-                    StringBuilder tripleMsec = new StringBuilder(4);
+                    StringBuilder trippleMsec = new StringBuilder(4);
                     if (frac < 100) {
                         if (frac < 10) {
-                            tripleMsec.append('0');
-                            tripleMsec.append('0');
+                            trippleMsec.append('0');
+                            trippleMsec.append('0');
                         } else {
-                            tripleMsec.append('0');
+                            trippleMsec.append('0');
                         }
                     }
-                    tripleMsec.append(frac);
-                    temp = temp.replace(tripleMsecPattern, tripleMsec);
+                    trippleMsec.append(frac);
+                    temp = temp.replace(trippleMsecPattern, trippleMsec);
                     temp = temp.replace(msecPattern, Long.toString(frac));
                 }
                 buf.append(temp);

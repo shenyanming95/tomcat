@@ -822,16 +822,4 @@ public class FailedContext extends LifecycleMBeanBase implements Context {
     public void setCreateUploadTargets(boolean createUploadTargets) { /* NO-OP */}
     @Override
     public boolean getCreateUploadTargets() { return false; }
-
-    @Override
-    public boolean isParallelAnnotationScanning() { return false; }
-    @Override
-    public void setParallelAnnotationScanning(boolean parallelAnnotationScanning) {}
-
-    @Override
-    public boolean getUseBloomFilterForArchives() { return false; }
-
-    @Override
-    public void setUseBloomFilterForArchives(boolean useBloomFilterForArchives) {}
-
 }

@@ -73,7 +73,7 @@ public class DeltaManager extends ClusterManagerBase{
     private boolean expireSessionsOnShutdown = false;
     private boolean notifySessionListenersOnReplication = true;
     private boolean notifyContainerListenersOnReplication  = true;
-    private volatile boolean stateTransferred = false ;
+    private volatile boolean stateTransfered = false ;
     private volatile boolean noContextManagerReceived = false ;
     private int stateTransferTimeout = 60;
     private boolean sendAllSessions = true;
@@ -109,7 +109,7 @@ public class DeltaManager extends ClusterManagerBase{
     private long counterSend_EVT_SESSION_EXPIRED = 0;
     private int counterSend_EVT_ALL_SESSION_TRANSFERCOMPLETE = 0 ;
     private long counterSend_EVT_CHANGE_SESSION_ID = 0;
-    private int counterNoStateTransferred = 0 ;
+    private int counterNoStateTransfered = 0 ;
 
 
     // ------------------------------------------------------------- Constructor
@@ -265,20 +265,10 @@ public class DeltaManager extends ClusterManagerBase{
     }
 
     /**
-     * @return Returns the counterNoStateTransferred.
-     * @deprecated Use {@link #getCounterNoStateTransferred()}. Will be removed
-     *             in Tomcat 10 onwards.
+     * @return Returns the counterNoStateTransfered.
      */
-    @Deprecated
     public int getCounterNoStateTransfered() {
-        return getCounterNoStateTransferred();
-    }
-
-    /**
-     * @return Returns the counterNoStateTransferred.
-     */
-    public int getCounterNoStateTransferred() {
-        return counterNoStateTransferred;
+        return counterNoStateTransfered;
     }
 
     public int getReceivedQueueSize() {
@@ -300,38 +290,17 @@ public class DeltaManager extends ClusterManagerBase{
 
     /**
      * @return <code>true</code> if the state transfer is complete.
-     * @deprecated Use {@link #getStateTransferred()}. Will be removed in Tomcat
-     *             10 onwards.
      */
-    @Deprecated
     public boolean getStateTransfered() {
-        return getStateTransferred();
+        return stateTransfered;
     }
 
     /**
      * Set that state transferred is complete
-     * @param stateTransferred Flag value
-     * @deprecated Use {@link #setStateTransferred(boolean)}. Will be removed in
-     *             Tomcat 10 onwards.
+     * @param stateTransfered Flag value
      */
-    @Deprecated
-    public void setStateTransfered(boolean stateTransferred) {
-        setStateTransferred(stateTransferred);
-    }
-
-    /**
-     * @return <code>true</code> if the state transfer is complete.
-     */
-    public boolean getStateTransferred() {
-        return stateTransferred;
-    }
-
-    /**
-     * Set that state transferred is complete
-     * @param stateTransferred Flag value
-     */
-    public void setStateTransferred(boolean stateTransferred) {
-        this.stateTransferred = stateTransferred;
+    public void setStateTransfered(boolean stateTransfered) {
+        this.stateTransfered = stateTransfered;
     }
 
     public boolean isNoContextManagerReceived() {
@@ -804,7 +773,7 @@ public class DeltaManager extends ClusterManagerBase{
             stateTransferCreateSendTime = beforeSendTime ;
             // request session state
             counterSend_EVT_GET_ALL_SESSIONS++;
-            stateTransferred = false ;
+            stateTransfered = false ;
             // FIXME This send call block the deploy thread, when sender waitForAck is enabled
             try {
                 synchronized(receivedMessageQueue) {
@@ -883,7 +852,7 @@ public class DeltaManager extends ClusterManagerBase{
                 }
                 reqNow = System.currentTimeMillis();
                 isTimeout = ((reqNow - reqStart) > (1000L * getStateTransferTimeout()));
-            } while ((!getStateTransferred()) && (!isTimeout) && (!isNoContextManagerReceived()));
+            } while ((!getStateTransfered()) && (!isTimeout) && (!isNoContextManagerReceived()));
         } else {
             if(getStateTransferTimeout() == -1) {
                 // wait that state is transferred
@@ -892,12 +861,12 @@ public class DeltaManager extends ClusterManagerBase{
                         Thread.sleep(100);
                     } catch (Exception sleep) {
                     }
-                } while ((!getStateTransferred())&& (!isNoContextManagerReceived()));
+                } while ((!getStateTransfered())&& (!isNoContextManagerReceived()));
                 reqNow = System.currentTimeMillis();
             }
         }
         if (isTimeout) {
-            counterNoStateTransferred++ ;
+            counterNoStateTransfered++ ;
             log.error(sm.getString("deltaManager.noSessionState", getName(),
                     new Date(beforeSendTime), Long.valueOf(reqNow - beforeSendTime)));
         }else if (isNoContextManagerReceived()) {
@@ -1101,7 +1070,7 @@ public class DeltaManager extends ClusterManagerBase{
         }
         rejectedSessions = 0 ;
         sessionReplaceCounter = 0 ;
-        counterNoStateTransferred = 0 ;
+        counterNoStateTransfered = 0 ;
         setMaxActive(getActiveSessions());
         sessionCounter = getActiveSessions() ;
         counterReceive_EVT_ALL_SESSION_DATA = 0;
@@ -1263,7 +1232,7 @@ public class DeltaManager extends ClusterManagerBase{
                     getName(), sender.getHost(), Integer.valueOf(sender.getPort())));
         }
         stateTransferCreateSendTime = msg.getTimestamp() ;
-        stateTransferred = true ;
+        stateTransfered = true ;
     }
 
     /**
@@ -1422,7 +1391,7 @@ public class DeltaManager extends ClusterManagerBase{
                 "SESSION-STATE-TRANSFERRED" + getName());
         newmsg.setTimestamp(findSessionTimestamp);
         if (log.isDebugEnabled()) {
-            log.debug(sm.getString("deltaManager.createMessage.allSessionTransferred",getName()));
+            log.debug(sm.getString("deltaManager.createMessage.allSessionTransfered",getName()));
         }
         counterSend_EVT_ALL_SESSION_TRANSFERCOMPLETE++;
         cluster.send(newmsg, sender);

@@ -21,8 +21,6 @@ import java.nio.file.FileSystems;
 import java.util.ServiceLoader;
 import java.util.logging.LogManager;
 
-import aQute.bnd.annotation.spi.ServiceConsumer;
-
 /**
  * This is a modified LogFactory that uses a simple {@link ServiceLoader} based
  * discovery mechanism with a default of using JDK based logging. An
@@ -63,7 +61,6 @@ import aQute.bnd.annotation.spi.ServiceConsumer;
  * @author Costin Manolache
  * @author Richard A. Sitze
  */
-@ServiceConsumer(value=org.apache.juli.logging.Log.class)
 public class LogFactory {
 
     private static final LogFactory singleton = new LogFactory();

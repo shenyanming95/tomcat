@@ -33,7 +33,6 @@ import org.apache.catalina.Session;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 import org.apache.coyote.ActionCode;
-import org.apache.coyote.ContinueResponseTiming;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.ExceptionUtils;
@@ -231,7 +230,7 @@ public class FormAuthenticator
 
         // Yes -- Acknowledge the request, validate the specified credentials
         // and redirect to the error page if they are not correct
-        request.getResponse().sendAcknowledgement(ContinueResponseTiming.ALWAYS);
+        request.getResponse().sendAcknowledgement();
         Realm realm = context.getRealm();
         if (characterEncoding != null) {
             request.setCharacterEncoding(characterEncoding);
@@ -671,7 +670,7 @@ public class FormAuthenticator
         }
 
         // May need to acknowledge a 100-continue expectation
-        request.getResponse().sendAcknowledgement(ContinueResponseTiming.ALWAYS);
+        request.getResponse().sendAcknowledgement();
 
         int maxSavePostSize = request.getConnector().getMaxSavePostSize();
         if (maxSavePostSize != 0) {

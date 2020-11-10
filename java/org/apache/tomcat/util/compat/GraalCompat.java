@@ -32,7 +32,7 @@ class GraalCompat extends Jre9Compat {
         } catch (ReflectiveOperationException | IllegalArgumentException e) {
             // Should never happen
         }
-        GRAAL = result || System.getProperty("org.graalvm.nativeimage.imagecode") != null;
+        GRAAL = result;
     }
 
     static boolean isSupported() {

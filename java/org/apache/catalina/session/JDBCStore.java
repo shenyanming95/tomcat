@@ -53,10 +53,7 @@ import org.apache.tomcat.util.ExceptionUtils;
  * based on inactivity.
  *
  * @author Bip Thelin
- * @deprecated Removed in Tomcat 10 and replaced by DataSourceStore
- *  with removal of legacy JDBC code
  */
-@Deprecated
 public class JDBCStore extends StoreBase {
 
     /**
@@ -448,7 +445,7 @@ public class JDBCStore extends StoreBase {
      * @param dataSourceName The JNDI name of the DataSource-factory
      */
     public void setDataSourceName(String dataSourceName) {
-        if (dataSourceName == null || dataSourceName.trim().isEmpty()) {
+        if (dataSourceName == null || "".equals(dataSourceName.trim())) {
             manager.getContext().getLogger().warn(
                     sm.getString(getStoreName() + ".missingDataSourceName"));
             return;
@@ -939,9 +936,6 @@ public class JDBCStore extends StoreBase {
         if (connectionPassword != null)
             props.put("password", connectionPassword);
         dbConnection = driver.connect(connectionURL, props);
-        if (dbConnection == null) {
-            throw new SQLException(sm.getString(getStoreName() + ".connectError", connectionURL));
-        }
         dbConnection.setAutoCommit(true);
         return dbConnection;
 

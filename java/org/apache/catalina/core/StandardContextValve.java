@@ -26,7 +26,6 @@ import org.apache.catalina.Wrapper;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 import org.apache.catalina.valves.ValveBase;
-import org.apache.coyote.ContinueResponseTiming;
 import org.apache.tomcat.util.buf.MessageBytes;
 import org.apache.tomcat.util.res.StringManager;
 
@@ -62,8 +61,7 @@ final class StandardContextValve extends ValveBase {
     @Override
     public final void invoke(Request request, Response response)
         throws IOException, ServletException {
-
-        // Disallow any direct access to resources under WEB-INF or META-INF
+        // 禁止直接访问WEB-INF或META-INF下的资源
         MessageBytes requestPathMB = request.getRequestPathMB();
         if ((requestPathMB.startsWithIgnoreCase("/META-INF/", 0))
                 || (requestPathMB.equalsIgnoreCase("/META-INF"))
@@ -72,28 +70,25 @@ final class StandardContextValve extends ValveBase {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
-
-        // Select the Wrapper to be used for this Request
+        // 从request中获取要执行的Servlet, 包裹在Wrapper中
         Wrapper wrapper = request.getWrapper();
         if (wrapper == null || wrapper.isUnavailable()) {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
-
-        // Acknowledge the request
+        // 确认是否可以执行Request
         try {
-            response.sendAcknowledgement(ContinueResponseTiming.IMMEDIATELY);
+            response.sendAcknowledgement();
         } catch (IOException ioe) {
-            container.getLogger().error(sm.getString(
-                    "standardContextValve.acknowledgeException"), ioe);
+            container.getLogger().error(sm.getString("standardContextValve.acknowledgeException"), ioe);
             request.setAttribute(RequestDispatcher.ERROR_EXCEPTION, ioe);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             return;
         }
-
         if (request.isAsyncSupported()) {
             request.setAsyncSupported(wrapper.getPipeline().isAsyncSupported());
         }
+        // 调用 StandardWrapperValve 处理请求
         wrapper.getPipeline().getFirst().invoke(request, response);
     }
 }

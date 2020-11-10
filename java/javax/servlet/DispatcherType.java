@@ -17,12 +17,34 @@
 package javax.servlet;
 
 /**
+ * JavaWeb过滤器分为四类, 分别对应四种触发类型： REQUEST、FORWARD、INCLUDE、ERROR、ASYNC
+ * 若在注册的时候没有特别声明，则默认为REQUEST。
+ *
  * @since Servlet 3.0
  */
 public enum DispatcherType {
+    /**
+     * 对forward动作指令进行过滤，并且无论是jsp页面内的Forward标签还是Java代码中的forward指令都会被过滤处理
+     */
     FORWARD,
+
+    /**
+     * 对指定页面的include进行过滤，用法与Forward类型一致
+     */
     INCLUDE,
+
+    /**
+     * 默认的, 对Request请求进行过滤
+     */
     REQUEST,
+
+    /**
+     * 异步Servlet过滤
+     */
     ASYNC,
+
+    /**
+     * 对错误访问的过滤，比较常见的错误为404、500等
+     */
     ERROR
 }

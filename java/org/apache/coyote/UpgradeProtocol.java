@@ -16,7 +16,6 @@
  */
 package org.apache.coyote;
 
-import org.apache.coyote.http11.AbstractHttp11Protocol;
 import org.apache.coyote.http11.upgrade.InternalHttpUpgradeHandler;
 import org.apache.tomcat.util.net.SocketWrapperBase;
 
@@ -105,31 +104,7 @@ public interface UpgradeProtocol {
      *                 handle any connections passed to this UpgradeProtocol via
      *                 the HTTP upgrade mechanism
      */
-    public default void setHttp11Protocol(AbstractHttp11Protocol<?> protocol) {
-        // NO-OP
-    }
-
-
-    /**
-     * Configure the HTTP/1.1 protocol that this UpgradeProcotol is nested
-     * under. Connections passed to this UpgradeProtocol via HTTP upgrade will
-     * have been initially handled by this HTTP/1.1 protocol implementation.
-     * <p>
-     * The default implementation is to call
-     * {@link #setHttp11Protocol(AbstractHttp11Protocol)} if protocol is an
-     * instance of {@link AbstractHttp11Protocol} else this is a NO-OP.
-     *
-     * @param protocol The HTTP/1.1 protocol implementation that will initially
-     *                 handle any connections passed to this UpgradeProtocol via
-     *                 the HTTP upgrade mechanism
-     *
-     * @deprecated This will be removed in Tomcat 10. Use
-     *             {@link #setHttp11Protocol(AbstractHttp11Protocol)} instead
-     */
-    @Deprecated
     public default void setHttp11Protocol(AbstractProtocol<?> protocol) {
-        if (protocol instanceof AbstractHttp11Protocol) {
-            setHttp11Protocol((AbstractHttp11Protocol<?>) protocol);
-        }
+        // NO-OP
     }
 }

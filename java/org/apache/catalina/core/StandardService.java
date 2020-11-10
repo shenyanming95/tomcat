@@ -325,7 +325,7 @@ public class StandardService extends LifecycleMBeanBase implements Service {
     public String toString() {
         StringBuilder sb = new StringBuilder("StandardService[");
         sb.append(getName());
-        sb.append(']');
+        sb.append("]");
         return sb.toString();
     }
 
@@ -410,27 +410,26 @@ public class StandardService extends LifecycleMBeanBase implements Service {
      */
     @Override
     protected void startInternal() throws LifecycleException {
-
-        if(log.isInfoEnabled())
+        if(log.isInfoEnabled()){
             log.info(sm.getString("standardService.start.name", this.name));
+        }
         setState(LifecycleState.STARTING);
-
-        // Start our defined Container first
+        // 先启动Servlet容器
         if (engine != null) {
             synchronized (engine) {
                 engine.start();
             }
         }
-
+        // 再启动线程池
         synchronized (executors) {
             for (Executor executor: executors) {
                 executor.start();
             }
         }
-
+        // 启动Mapper监听器, 这个是用来从请求的URI中找出处理这个请求的host的组件
         mapperListener.start();
 
-        // Start our defined Connectors second
+        // 最后启动连接器
         synchronized (connectorsLock) {
             for (Connector connector: connectors) {
                 // If it has already failed, don't try and start it
@@ -504,30 +503,37 @@ public class StandardService extends LifecycleMBeanBase implements Service {
 
 
     /**
-     * Invoke a pre-startup initialization. This is used to allow connectors
-     * to bind to restricted ports under Unix operating environments.
+     * 初始化Service, 同时还会初始化子容器.
      */
     @Override
     protected void initInternal() throws LifecycleException {
-
+        // 抽象父类org.apache.catalina.util.LifecycleMBeanBase的方法, 就是为了注册组件到JMX
         super.initInternal();
 
+        /*
+         * Tomcat 的 Service包含：Connector和Engine, 一个是对外处理连接, 一个是对内处理请求.
+         * 所以必须内部服务起来后, 才可以支持对外连接, 所以它这里先初始化 Engine, 再初始化Connector.
+         */
+
         if (engine != null) {
+            // 容器初始化, 会连带初始化子容器Host
             engine.init();
         }
 
-        // Initialize any Executors
+        // 初始化完Engine后, 初始化 Tomcat 自己定义的执行器Executor.
         for (Executor executor : findExecutors()) {
+            // 如果支持JMX, 设置JMX配置
             if (executor instanceof JmxEnabled) {
                 ((JmxEnabled) executor).setDomain(getDomain());
             }
+            // 初始化执行器
             executor.init();
         }
 
-        // Initialize mapper listener
+        // 初始化 MapperListener 监听器, 这边就是单纯地注册JMX, 并没有其它操作
         mapperListener.init();
 
-        // Initialize our defined Connectors
+        // 初始化连接器.
         synchronized (connectorsLock) {
             for (Connector connector : connectors) {
                 connector.init();

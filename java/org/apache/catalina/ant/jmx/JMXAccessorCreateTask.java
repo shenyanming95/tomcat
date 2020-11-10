@@ -154,7 +154,7 @@ public class JMXAccessorCreateTask extends JMXAccessorTask {
                }
            }
         }
-        if (classLoader != null && !classLoader.isEmpty()) {
+        if (classLoader != null && !"".equals(classLoader)) {
             if (isEcho()) {
                 handleOutput("create MBean " + name + " from class "
                         + className + " with classLoader " + classLoader);

@@ -18,6 +18,9 @@ package org.apache.tomcat.util.threads;
 
 import java.util.concurrent.Executor;
 
+/**
+ * 扩展JDK自带的{@link Executor}, 加入了重新配置的功能方法
+ */
 public interface ResizableExecutor extends Executor {
 
     /**

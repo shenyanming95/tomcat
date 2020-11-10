@@ -153,7 +153,7 @@ import org.apache.tomcat.util.res.StringManager;
  * see setters for doc. It can be used for simple tests and
  * demo.
  *
- * @see <a href="https://gitbox.apache.org/repos/asf?p=tomcat.git;a=blob;f=test/org/apache/catalina/startup/TestTomcat.java">TestTomcat</a>
+ * @see <a href="https://svn.apache.org/repos/asf/tomcat/trunk/test/org/apache/catalina/startup/TestTomcat.java">TestTomcat</a>
  * @author Costin Manolache
  */
 public class Tomcat {
@@ -988,9 +988,9 @@ public class Tomcat {
         loggerName.append("].[");
         // Context name
         if (contextName == null || contextName.equals("")) {
-            loggerName.append('/');
+            loggerName.append("/");
         } else if (contextName.startsWith("##")) {
-            loggerName.append('/');
+            loggerName.append("/");
             loggerName.append(contextName);
         }
         loggerName.append(']');
@@ -1011,7 +1011,6 @@ public class Tomcat {
      * @return newly created {@link Context}
      */
     private Context createContext(Host host, String url) {
-        String defaultContextClass = StandardContext.class.getName();
         String contextClass = StandardContext.class.getName();
         if (host == null) {
             host = this.getHost();
@@ -1020,13 +1019,8 @@ public class Tomcat {
             contextClass = ((StandardHost) host).getContextClass();
         }
         try {
-            if (defaultContextClass.equals(contextClass)) {
-                return new StandardContext();
-            } else {
-                return (Context) Class.forName(contextClass).getConstructor()
+            return (Context) Class.forName(contextClass).getConstructor()
                     .newInstance();
-            }
-
         } catch (ReflectiveOperationException  | IllegalArgumentException | SecurityException e) {
             throw new IllegalArgumentException(sm.getString("tomcat.noContextClass", contextClass, host, url), e);
         }
@@ -1162,11 +1156,8 @@ public class Tomcat {
                 if (event.getType().equals(Lifecycle.CONFIGURE_START_EVENT)) {
                     context.setConfigured(true);
 
-                    // Process annotations when not running in a Graal image
-                    // annotations require reflections and additional configuration
-                    if (!JreCompat.isGraalAvailable()) {
-                        WebAnnotationSet.loadApplicationAnnotations(context);
-                    }
+                    // Process annotations
+                    WebAnnotationSet.loadApplicationAnnotations(context);
 
                     // LoginConfig is required to process @ServletSecurity
                     // annotations

@@ -241,9 +241,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase
     /**
      * The string manager for this package.
      */
-    protected static final StringManager sm =
-        StringManager.getManager(Constants.Package);
-
+    protected static final StringManager sm = StringManager.getManager(Constants.Package);
 
     /**
      * Will children be started automatically when they are added.
@@ -253,8 +251,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase
     /**
      * The property change support for this component.
      */
-    protected final PropertyChangeSupport support =
-            new PropertyChangeSupport(this);
+    protected final PropertyChangeSupport support = new PropertyChangeSupport(this);
 
 
     /**
@@ -266,8 +263,8 @@ public abstract class ContainerBase extends LifecycleMBeanBase
 
 
     /**
-     * The number of threads available to process start and stop events for any
-     * children associated with this container.
+     * 这两个属性关联一起使用, 其中 startStopExecutor 用来处理子容器的启动和关闭事件, 而
+     * startStopThreads, 用于配置 startStopExecutor 的核心线程数.
      */
     private int startStopThreads = 1;
     protected ExecutorService startStopExecutor;
@@ -613,23 +610,24 @@ public abstract class ContainerBase extends LifecycleMBeanBase
     }
 
     /**
-     * Set the Realm with which this Container is associated.
+     * 设置此容器关联的Realm
      *
      * @param realm The newly associated Realm
      */
     @Override
     public void setRealm(Realm realm) {
-
+        // 获取写锁.
         Lock l = realmLock.writeLock();
         l.lock();
         try {
-            // Change components if necessary
+            // 新旧Realm不一样才需要更换
             Realm oldRealm = this.realm;
-            if (oldRealm == realm)
+            if (oldRealm == realm){
                 return;
+            }
             this.realm = realm;
 
-            // Stop the old component if necessary
+            // 尝试暂停旧的Realm
             if (getState().isAvailable() && (oldRealm != null) &&
                 (oldRealm instanceof Lifecycle)) {
                 try {
@@ -639,7 +637,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase
                 }
             }
 
-            // Start the new component if necessary
+            // 尝试启动新的Realm
             if (realm != null)
                 realm.setContainer(this);
             if (getState().isAvailable() && (realm != null) &&
@@ -650,8 +648,7 @@ public abstract class ContainerBase extends LifecycleMBeanBase
                     log.error(sm.getString("containerBase.realm.start"), e);
                 }
             }
-
-            // Report this property change to interested listeners
+            // JDK自带的Java Bean工具类, 用来在Bean属性变化时, 触发它的监听器.
             support.firePropertyChange("realm", oldRealm, this.realm);
         } finally {
             l.unlock();
@@ -860,20 +857,23 @@ public abstract class ContainerBase extends LifecycleMBeanBase
 
     @Override
     protected void initInternal() throws LifecycleException {
+        // 配置线程池
         reconfigureStartStopExecutor(getStartStopThreads());
+        // 再调用上层父类即, 注册JMX
         super.initInternal();
     }
 
 
     private void reconfigureStartStopExecutor(int threads) {
         if (threads == 1) {
-            // Use a fake executor
+            // 如果线程数量只有1, tomcat使用自定义实现的假线程池, 其实就是同步执行
             if (!(startStopExecutor instanceof InlineExecutorService)) {
                 startStopExecutor = new InlineExecutorService();
             }
         } else {
-            // Delegate utility execution to the Service
+            // 从当前容器开始, 找到Service实例, 然后获取Server对象(Server可以理解为就是一个Tomcat实例)
             Server server = Container.getService(this).getServer();
+            // 重新设置Server的线程池数量
             server.setUtilityThreads(threads);
             startStopExecutor = server.getUtilityExecutor();
         }
@@ -889,28 +889,27 @@ public abstract class ContainerBase extends LifecycleMBeanBase
      */
     @Override
     protected synchronized void startInternal() throws LifecycleException {
-
         // Start our subordinate components, if any
         logger = null;
         getLogger();
+        // 集群相关
         Cluster cluster = getClusterInternal();
         if (cluster instanceof Lifecycle) {
             ((Lifecycle) cluster).start();
         }
+        // 安全认证相关
         Realm realm = getRealmInternal();
         if (realm instanceof Lifecycle) {
             ((Lifecycle) realm).start();
         }
-
-        // Start our child containers, if any
+        // 异步启动这个组件的子容器, 例如如果实现类是Engine的话, 获取到的子容器就是Host
         Container children[] = findChildren();
         List<Future<Void>> results = new ArrayList<>();
         for (Container child : children) {
             results.add(startStopExecutor.submit(new StartChild(child)));
         }
-
+        // 等待子容器启动
         MultiThrowable multiThrowable = null;
-
         for (Future<Void> result : results) {
             try {
                 result.get();
@@ -921,20 +920,16 @@ public abstract class ContainerBase extends LifecycleMBeanBase
                 }
                 multiThrowable.add(e);
             }
-
         }
         if (multiThrowable != null) {
             throw new LifecycleException(sm.getString("containerBase.threadedStartFailed"),
                     multiThrowable.getThrowable());
         }
-
         // Start the Valves in our pipeline (including the basic), if any
         if (pipeline instanceof Lifecycle) {
             ((Lifecycle) pipeline).start();
         }
-
         setState(LifecycleState.STARTING);
-
         // Start our thread
         if (backgroundProcessorDelay > 0) {
             monitorFuture = Container.getService(ContainerBase.this).getServer()
@@ -1350,9 +1345,12 @@ public abstract class ContainerBase extends LifecycleMBeanBase
                     // is performed under the web app's class loader
                     originalClassLoader = ((Context) container).bind(false, null);
                 }
+                // 调用当前容器的backgroundProcess()执行后台任务
                 container.backgroundProcess();
+                // 再调用所有子容器的backgroundProcess()
                 Container[] children = container.findChildren();
                 for (Container child : children) {
+                    // 若子容器的backgroundProcessorDelay大于0, 说明有延迟, 父容器无需调用子容器的周期性任务
                     if (child.getBackgroundProcessorDelay() <= 0) {
                         processChildren(child);
                     }

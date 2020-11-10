@@ -99,9 +99,6 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
      * @param t The error which occurred
      */
     protected void setErrorState(ErrorState errorState, Throwable t) {
-        if (getLog().isDebugEnabled()) {
-            getLog().debug(sm.getString("abstractProcessor.setErrorState", errorState), t);
-        }
         // Use the return value to avoid processing more than one async error
         // in a single async cycle.
         boolean setError = response.setError();
@@ -393,7 +390,7 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
             break;
         }
         case ACK: {
-            ack((ContinueResponseTiming) param);
+            ack();
             break;
         }
         case CLIENT_FLUSH: {
@@ -436,7 +433,7 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
             break;
         }
         case DISABLE_SWALLOW_INPUT: {
-            // Cancelled upload or similar.
+            // Aborted upload or similar.
             // No point reading the remainder of the request.
             disableSwallowRequest();
             // This is an error state. Make sure it is marked as such.
@@ -725,17 +722,7 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
     protected abstract void finishResponse() throws IOException;
 
 
-    /**
-     * @deprecated Unused. This will be removed in Tomcat 10 onwards. Use
-     *             {@link #ack(ContinueResponseTiming)}.
-     */
-    @Deprecated
-    protected void ack() {
-        ack(ContinueResponseTiming.ALWAYS);
-    }
-
-
-    protected abstract void ack(ContinueResponseTiming continueResponseTiming);
+    protected abstract void ack();
 
 
     protected abstract void flush() throws IOException;

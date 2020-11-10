@@ -152,12 +152,6 @@ public class Catalina {
 
 
     /**
-     * Top package name for generated source.
-     */
-    protected String generatedCodePackage = "catalinaembedded";
-
-
-    /**
      * Use generated code as a replacement for configuration files.
      */
     protected boolean useGeneratedCode = false;
@@ -220,16 +214,6 @@ public class Catalina {
 
     public void setGeneratedCodeLocation(File generatedCodeLocation) {
         this.generatedCodeLocation = generatedCodeLocation;
-    }
-
-
-    public String getGeneratedCodePackage() {
-        return this.generatedCodePackage;
-    }
-
-
-    public void setGeneratedCodePackage(String generatedCodePackage) {
-        this.generatedCodePackage = generatedCodePackage;
     }
 
 
@@ -554,30 +538,8 @@ public class Catalina {
         ConfigFileLoader.setSource(new CatalinaBaseConfigurationSource(Bootstrap.getCatalinaBaseFile(), getConfigFile()));
         File file = configFile();
 
-        if (useGeneratedCode && !Digester.isGeneratedCodeLoaderSet()) {
-            // Load loader
-            String loaderClassName = generatedCodePackage + ".DigesterGeneratedCodeLoader";
-            try {
-                Digester.GeneratedCodeLoader loader =
-                        (Digester.GeneratedCodeLoader) Catalina.class.getClassLoader().loadClass(loaderClassName).newInstance();
-                Digester.setGeneratedCodeLoader(loader);
-            } catch (Exception e) {
-                if (log.isDebugEnabled()) {
-                    log.info(sm.getString("catalina.noLoader", loaderClassName), e);
-                } else {
-                    log.info(sm.getString("catalina.noLoader", loaderClassName));
-                }
-                // No loader so don't use generated code
-                useGeneratedCode = false;
-            }
-        }
-
         // Init source location
         File serverXmlLocation = null;
-        String xmlClassName = null;
-        if (generateCode || useGeneratedCode) {
-            xmlClassName = start ? generatedCodePackage + ".ServerXml" : generatedCodePackage + ".ServerXmlStop";
-        }
         if (generateCode) {
             if (generatedCodeLocationParameter != null) {
                 generatedCodeLocation = new File(generatedCodeLocationParameter);
@@ -587,7 +549,7 @@ public class Catalina {
             } else {
                 generatedCodeLocation = new File(Bootstrap.getCatalinaHomeFile(), "work");
             }
-            serverXmlLocation = new File(generatedCodeLocation, generatedCodePackage);
+            serverXmlLocation = new File(generatedCodeLocation, "catalina");
             if (!serverXmlLocation.isDirectory() && !serverXmlLocation.mkdirs()) {
                 log.warn(sm.getString("catalina.generatedCodeLocationError", generatedCodeLocation.getAbsolutePath()));
                 // Disable code generation
@@ -597,7 +559,12 @@ public class Catalina {
 
         ServerXml serverXml = null;
         if (useGeneratedCode) {
-            serverXml = (ServerXml) Digester.loadGeneratedClass(xmlClassName);
+            String xmlClassName = start ? "catalina.ServerXml" : "catalina.ServerXmlStop";
+            try {
+                serverXml = (ServerXml) Catalina.class.getClassLoader().loadClass(xmlClassName).newInstance();
+            } catch (Exception e) {
+                // Ignore, no generated code found
+            }
         }
 
         if (serverXml != null) {
@@ -622,7 +589,6 @@ public class Catalina {
                         writer.write(digester.getGeneratedCode().toString());
                     }
                     digester.endGeneratingCode();
-                    Digester.addGeneratedClass(xmlClassName);
                 }
             } catch (Exception e) {
                 log.warn(sm.getString("catalina.configFail", file.getAbsolutePath()), e);
@@ -692,7 +658,7 @@ public class Catalina {
      * Start a new server instance.
      */
     public void load() {
-
+        // 防止重复加载
         if (loaded) {
             return;
         }
@@ -700,27 +666,36 @@ public class Catalina {
 
         long t1 = System.nanoTime();
 
+        // 听说 tomcat 10 就会被删除掉.
         initDirs();
 
-        // Before digester - it may be needed
+        // 这里面涉及JNDI(Java命名和目录接口), JNDI可以：访问文件系统中的文件、定位远程RMI注册的对象，访问象LDAP这样的目录服务，定位网络上的EJB组件等等.
+        // 其中, javax.naming.Context 是命名服务执行查询的入口, tomcat会设值系统属性 java.naming.factory.initial 为
+        // org.apache.naming.java.javaURLContextFactory.
         initNaming();
 
-        // Parse main server.xml
+        // 解析 ../conf/server.xml, 这是tomcat核心配置之一, 它会定义 Server、Service、Connector、Engine、Host、Context和Listener等组件.
+        // 会把配置文件的内容解析到 org.apache.catalina.startup.Catalina#server属性上
         parseServerXml(true);
+        // 有了上面的解析, 就可以获取到 org.apache.catalina.Server, 注意Server里面有连带它的其它组件信息噢
         Server s = getServer();
         if (s == null) {
             return;
         }
-
+        // 设置 Server 的catalina根目录
         getServer().setCatalina(this);
         getServer().setCatalinaHome(Bootstrap.getCatalinaHomeFile());
         getServer().setCatalinaBase(Bootstrap.getCatalinaBaseFile());
 
-        // Stream redirection
+        // tomcat使用装饰者模式, 替换了 java 自带的 System.out and System.err
         initStreams();
 
         // Start the new server
         try {
+            // 初始化 Server, tomcat的生命周期组件, 父组件触发生命周期的方法, 会联动旗下的子组件一起触发.
+            // tomcat生命周期方法, 一般有两层：
+            // 一是, 抽象父类 org.apache.catalina.util.LifecycleBase 实现的, 做状态检查和回调监听器的.
+            // 二是, 具体子类(这边是org.apache.catalina.core.StandardServer)的实际运行逻辑.
             getServer().init();
         } catch (LifecycleException e) {
             if (Boolean.getBoolean("org.apache.catalina.startup.EXIT_ON_INIT_FAILURE")) {
@@ -752,23 +727,22 @@ public class Catalina {
 
 
     /**
-     * Start a new server instance.
+     * 启动一个Server, 也就是Tomcat实例
      */
     public void start() {
-
+        // 如果Server为空, 先加载
         if (getServer() == null) {
             load();
         }
-
+        // 还为空, 说明有异常
         if (getServer() == null) {
             log.fatal(sm.getString("catalina.noServer"));
             return;
         }
-
         long t1 = System.nanoTime();
-
-        // Start the new server
         try {
+            // 启动Server, 就是启动Tomcat实例. 由于Tomcat在设计上使用了LifeCycle, 上层组件的启动,
+            // 会连带它关联的下层组件的启动, 这就是一键启停的设计精华.
             getServer().start();
         } catch (LifecycleException e) {
             log.fatal(sm.getString("catalina.serverStartFail"), e);
@@ -782,11 +756,6 @@ public class Catalina {
 
         if (log.isInfoEnabled()) {
             log.info(sm.getString("catalina.startup", Long.toString(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t1))));
-        }
-
-        if (generateCode) {
-            // Generate loader which will load all generated classes
-            generateLoader();
         }
 
         // Register shutdown hook
@@ -807,7 +776,9 @@ public class Catalina {
         }
 
         if (await) {
+            // Tomcat实例会在这边阻塞住, 等待停止的命令
             await();
+            // 如果发起了停止指令, 调用stop()方法
             stop();
         }
     }
@@ -894,7 +865,7 @@ public class Catalina {
     protected void initNaming() {
         // Setting additional variables
         if (!useNaming) {
-            log.info(sm.getString("catalina.noNaming"));
+            log.info(sm.getString("catalina.noNatming"));
             System.setProperty("catalina.useNaming", "false");
         } else {
             System.setProperty("catalina.useNaming", "true");
@@ -931,33 +902,9 @@ public class Catalina {
     }
 
 
-    protected void generateLoader() {
-        String loaderClassName = "DigesterGeneratedCodeLoader";
-        StringBuilder code = new StringBuilder();
-        code.append("package ").append(generatedCodePackage).append(";").append(System.lineSeparator());
-        code.append("public class ").append(loaderClassName);
-        code.append(" implements org.apache.tomcat.util.digester.Digester.GeneratedCodeLoader {").append(System.lineSeparator());
-        code.append("public Object loadGeneratedCode(String className) {").append(System.lineSeparator());
-        code.append("switch (className) {").append(System.lineSeparator());
-        for (String generatedClassName : Digester.getGeneratedClasses()) {
-            code.append("case \"").append(generatedClassName).append("\" : return new ").append(generatedClassName);
-            code.append("();").append(System.lineSeparator());
-        }
-        code.append("default: return null; }").append(System.lineSeparator());
-        code.append("}}").append(System.lineSeparator());
-        File loaderLocation = new File(generatedCodeLocation, generatedCodePackage);
-        try (FileWriter writer = new FileWriter(new File(loaderLocation, loaderClassName + ".java"))) {
-            writer.write(code.toString());
-        } catch (IOException e) {
-            // Should not happen
-            log.debug("Error writing code loader", e);
-        }
-    }
-
-
     protected void generateClassHeader(Digester digester, boolean start) {
         StringBuilder code = digester.getGeneratedCode();
-        code.append("package ").append(generatedCodePackage).append(";").append(System.lineSeparator());
+        code.append("package catalina;").append(System.lineSeparator());
         code.append("public class ServerXml");
         if (!start) {
             code.append("Stop");
@@ -965,14 +912,14 @@ public class Catalina {
         code.append(" implements ");
         code.append(ServerXml.class.getName().replace('$', '.')).append(" {").append(System.lineSeparator());
         code.append("public void load(").append(Catalina.class.getName());
-        code.append(' ').append(digester.toVariableName(this)).append(") {").append(System.lineSeparator());
+        code.append(" ").append(digester.toVariableName(this)).append(") {").append(System.lineSeparator());
     }
 
 
     protected void generateClassFooter(Digester digester) {
         StringBuilder code = digester.getGeneratedCode();
-        code.append('}').append(System.lineSeparator());
-        code.append('}').append(System.lineSeparator());
+        code.append("}").append(System.lineSeparator());
+        code.append("}").append(System.lineSeparator());
     }
 
 

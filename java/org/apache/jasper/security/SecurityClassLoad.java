@@ -42,8 +42,7 @@ public final class SecurityClassLoad {
             loader.loadClass( basePackage + "runtime.JspFactoryImpl$PrivilegedGetPageContext");
             loader.loadClass( basePackage + "runtime.JspFactoryImpl$PrivilegedReleasePageContext");
             loader.loadClass( basePackage + "runtime.JspFragmentHelper");
-            Class<?> clazz = loader.loadClass( basePackage + "runtime.JspRuntimeLibrary");
-            clazz.getConstructor().newInstance();
+            loader.loadClass( basePackage + "runtime.JspRuntimeLibrary");
             loader.loadClass( basePackage + "runtime.PageContextImpl");
             loader.loadClass( basePackage + "runtime.ProtectedFunctionMapper");
             loader.loadClass( basePackage + "runtime.ServletResponseWrapperInclude");
@@ -53,7 +52,7 @@ public final class SecurityClassLoad {
             SecurityUtil.isPackageProtectionEnabled();
 
             loader.loadClass( basePackage + "servlet.JspServletWrapper");
-        } catch (Exception ex) {
+        } catch (ClassNotFoundException ex) {
             Log log = LogFactory.getLog(SecurityClassLoad.class);
             log.error(Localizer.getMessage("jsp.error.securityPreload"), ex);
         }

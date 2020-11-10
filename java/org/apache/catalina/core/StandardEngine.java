@@ -38,7 +38,9 @@ import org.apache.catalina.Server;
 import org.apache.catalina.Service;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
+import org.apache.catalina.realm.LockOutRealm;
 import org.apache.catalina.realm.NullRealm;
+import org.apache.catalina.util.LifecycleMBeanBase;
 import org.apache.catalina.util.ServerInfo;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -108,18 +110,17 @@ public class StandardEngine extends ContainerBase implements Engine {
     // ------------------------------------------------------------- Properties
 
     /**
-     * Obtain the configured Realm and provide a default Realm implementation
-     * when no explicit configuration is set.
-     *
-     * @return configured realm, or a {@link NullRealm} by default
+     * 获取在 ./conf/Server.xml 配置的 Realm组件, 一般是{@link LockOutRealm}.
+     * 如果没有配置, 默认使用{@link NullRealm}
      */
     @Override
     public Realm getRealm() {
+        // 获取父类 org.apache.catalina.core.ContainerBase 的Realm对象
         Realm configured = super.getRealm();
-        // If no set realm has been called - default to NullRealm
-        // This can be overridden at engine, context and host level
+        // 如果没有配置, 则使用默认的 NullRealm
         if (configured == null) {
             configured = new NullRealm();
+            // 并且回设到抽象父类里, 这里会重启新的Realm.
             this.setRealm(configured);
         }
         return configured;
@@ -234,11 +235,14 @@ public class StandardEngine extends ContainerBase implements Engine {
     }
 
 
+    /**
+     * {@link StandardEngine} 继承自 {@link ContainerBase} 继承自 {@link LifecycleMBeanBase}.
+     */
     @Override
     protected void initInternal() throws LifecycleException {
-        // Ensure that a Realm is present before any attempt is made to start
-        // one. This will create the default NullRealm if necessary.
+        // 确保Engine容器内必定有一个Realm组件
         getRealm();
+        // 调用抽象父类 ContainerBase#initInternal()方法
         super.initInternal();
     }
 
@@ -252,12 +256,9 @@ public class StandardEngine extends ContainerBase implements Engine {
      */
     @Override
     protected synchronized void startInternal() throws LifecycleException {
-
-        // Log our server identification information
         if (log.isInfoEnabled()) {
             log.info(sm.getString("standardEngine.start", ServerInfo.getServerInfo()));
         }
-
         // Standard container startup
         super.startInternal();
     }
@@ -485,7 +486,7 @@ public class StandardEngine extends ContainerBase implements Engine {
             if (disabled) return;
             if (Container.ADD_CHILD_EVENT.equals(event.getType())) {
                 Context context = (Context) event.getData();
-                if (context.getPath().isEmpty()) {
+                if ("".equals(context.getPath())) {
                     // Force re-calculation and disable listener since it won't
                     // be re-used
                     engine.defaultAccessLog.set(null);

@@ -52,9 +52,6 @@ public class Http11OutputBuffer implements HttpOutputBuffer {
     protected final Response response;
 
 
-    private volatile boolean ackSent = false;
-
-
     /**
      * Finished flag.
      */
@@ -275,7 +272,6 @@ public class Http11OutputBuffer implements HttpOutputBuffer {
         // Reset pointers
         headerBuffer.position(0).limit(headerBuffer.capacity());
         lastActiveFilter = -1;
-        ackSent = false;
         responseFinished = false;
         byteCount = 0;
     }
@@ -287,11 +283,7 @@ public class Http11OutputBuffer implements HttpOutputBuffer {
 
 
     public void sendAck() throws IOException {
-        // It possible that the protocol configuration is changed between the
-        // request being received and the first read of the body. That could led
-        // to multiple calls to this method so ensure the ACK is only sent once.
-        if (!response.isCommitted() && !ackSent) {
-            ackSent = true;
+        if (!response.isCommitted()) {
             socketWrapper.write(isBlocking(), Constants.ACK_BYTES, 0, Constants.ACK_BYTES.length);
             if (flushBuffer(true)) {
                 throw new IOException(sm.getString("iob.failedwrite.ack"));

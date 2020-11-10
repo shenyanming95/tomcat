@@ -29,7 +29,7 @@ import org.apache.juli.logging.LogFactory;
 
 
 /**
- * Utility class to read the bootstrap Catalina configuration.
+ * 用来加载 ../conf/catalina.properties 的配置信息
  *
  * @author Remy Maucherat
  */

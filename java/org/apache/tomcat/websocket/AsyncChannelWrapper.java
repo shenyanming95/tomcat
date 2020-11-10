@@ -16,8 +16,6 @@
  */
 package org.apache.tomcat.websocket;
 
-import java.io.IOException;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.util.concurrent.Future;
@@ -46,6 +44,4 @@ public interface AsyncChannelWrapper {
     void close();
 
     Future<Void> handshake() throws SSLException;
-
-    SocketAddress getLocalAddress() throws IOException;
 }

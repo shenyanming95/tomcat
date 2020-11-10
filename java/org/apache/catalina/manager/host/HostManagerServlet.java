@@ -394,7 +394,7 @@ public class HostManagerServlet
                         "hostManagerServlet.configBaseCreateFail", name));
                 return;
             }
-            try (InputStream is = getServletContext().getResourceAsStream("/WEB-INF/manager.xml")) {
+            try (InputStream is = getServletContext().getResourceAsStream("/manager.xml")) {
                 Path dest = (new File(configBaseFile, "manager.xml")).toPath();
                 Files.copy(is, dest);
             } catch (IOException e) {
@@ -410,7 +410,7 @@ public class HostManagerServlet
         host.addLifecycleListener(new HostConfig());
 
         // Add host aliases
-        if ((aliases != null) && !aliases.isEmpty()) {
+        if ((aliases != null) && !("".equals(aliases))) {
             StringTokenizer tok = new StringTokenizer(aliases, ", ");
             while (tok.hasMoreTokens()) {
                 host.addAlias(tok.nextToken());
@@ -522,7 +522,8 @@ public class HostManagerServlet
             Host host = (Host) container;
             String name = host.getName();
             String[] aliases = host.findAliases();
-            writer.println(String.format("[%s]:[%s]", name, StringUtils.join(aliases)));
+            writer.println(smClient.getString("hostManagerServlet.listitem",
+                    name, StringUtils.join(aliases)));
         }
     }
 

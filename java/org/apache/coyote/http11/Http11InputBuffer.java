@@ -71,7 +71,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
     /**
      * State.
      */
-    private volatile boolean parsingHeader;
+    private boolean parsingHeader;
 
 
     /**
@@ -130,7 +130,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
      */
     private byte prevChr = 0;
     private byte chr = 0;
-    private volatile boolean parsingRequestLine;
+    private boolean parsingRequestLine;
     private int parsingRequestLinePhase = 0;
     private boolean parsingRequestLineEol = false;
     private int parsingRequestLineStart = 0;
@@ -242,11 +242,12 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
     @Override
     public int doRead(ApplicationBufferHandler handler) throws IOException {
-        if (lastActiveFilter == -1) {
+
+        if (lastActiveFilter == -1)
             return inputStreamInputBuffer.doRead(handler);
-        } else {
+        else
             return activeFilters[lastActiveFilter].doRead(handler);
-        }
+
     }
 
 
@@ -266,22 +267,18 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
         byteBuffer.limit(0).position(0);
         lastActiveFilter = -1;
+        parsingHeader = true;
         swallowInput = true;
 
         chr = 0;
         prevChr = 0;
         headerParsePos = HeaderParsePosition.HEADER_START;
+        parsingRequestLine = true;
         parsingRequestLinePhase = 0;
         parsingRequestLineEol = false;
         parsingRequestLineStart = 0;
         parsingRequestLineQPos = -1;
         headerData.recycle();
-        // Recycled last because they are volatile
-        // All variables visible to this thread are guaranteed to be visible to
-        // any other thread once that thread reads the same volatile. The first
-        // action when parsing input data is to read one of these volatiles.
-        parsingRequestLine = true;
-        parsingHeader = true;
     }
 
 
@@ -389,6 +386,10 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
             parsingRequestLineStart = byteBuffer.position();
             parsingRequestLinePhase = 2;
+            if (log.isDebugEnabled()) {
+                log.debug("Received ["
+                        + new String(byteBuffer.array(), byteBuffer.position(), byteBuffer.remaining(), StandardCharsets.ISO_8859_1) + "]");
+            }
         }
         if (parsingRequestLinePhase == 2) {
             //
@@ -647,25 +648,17 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
     }
 
 
-    @Override
-    public int available() {
-        return available(false);
-    }
-
-
     /**
      * Available bytes in the buffers (note that due to encoding, this may not
      * correspond).
      */
     int available(boolean read) {
-        int available;
-
-        if (lastActiveFilter == -1) {
-            available = inputStreamInputBuffer.available();
-        } else {
-            available = activeFilters[lastActiveFilter].available();
+        int available = byteBuffer.remaining();
+        if ((available == 0) && (lastActiveFilter >= 0)) {
+            for (int i = 0; (available == 0) && (i <= lastActiveFilter); i++) {
+                available = activeFilters[i].available();
+            }
         }
-
         if (available > 0 || !read) {
             return available;
         }
@@ -764,14 +757,6 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
      */
     private boolean fill(boolean block) throws IOException {
 
-        if (log.isDebugEnabled()) {
-            log.debug("Before fill(): [" + parsingHeader +
-                    "], parsingRequestLine: [" + parsingRequestLine +
-                    "], parsingRequestLinePhase: [" + parsingRequestLinePhase +
-                    "], parsingRequestLineStart: [" + parsingRequestLineStart +
-                    "], byteBuffer.position() [" + byteBuffer.position() + "]");
-        }
-
         if (parsingHeader) {
             if (byteBuffer.limit() >= headerBufferSize) {
                 if (parsingRequestLine) {
@@ -797,12 +782,6 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
             throw new CloseNowException(sm.getString("iib.eof.error"));
         }
         byteBuffer.limit(byteBuffer.position()).reset();
-
-        if (log.isDebugEnabled()) {
-            log.debug("Received ["
-                    + new String(byteBuffer.array(), byteBuffer.position(), byteBuffer.remaining(), StandardCharsets.ISO_8859_1) + "]");
-        }
-
         if (nRead > 0) {
             return true;
         } else if (nRead == -1) {
@@ -1160,11 +1139,6 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
             byteBuffer.position(byteBuffer.limit());
 
             return length;
-        }
-
-        @Override
-        public int available() {
-            return byteBuffer.remaining();
         }
     }
 

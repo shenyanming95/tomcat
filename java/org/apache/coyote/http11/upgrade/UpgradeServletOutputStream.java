@@ -37,7 +37,6 @@ public class UpgradeServletOutputStream extends ServletOutputStream {
 
     private final UpgradeProcessorBase processor;
     private final SocketWrapperBase<?> socketWrapper;
-    private final UpgradeInfo upgradeInfo;
 
     // Used to ensure that isReady() and onWritePossible() have a consistent
     // view of buffer and registered.
@@ -62,11 +61,10 @@ public class UpgradeServletOutputStream extends ServletOutputStream {
 
 
 
-    public UpgradeServletOutputStream(UpgradeProcessorBase processor, SocketWrapperBase<?> socketWrapper,
-            UpgradeInfo upgradeInfo) {
+    public UpgradeServletOutputStream(UpgradeProcessorBase processor,
+            SocketWrapperBase<?> socketWrapper) {
         this.processor = processor;
         this.socketWrapper = socketWrapper;
-        this.upgradeInfo = upgradeInfo;
     }
 
 
@@ -212,7 +210,6 @@ public class UpgradeServletOutputStream extends ServletOutputStream {
         } else {
             socketWrapper.write(false, b, off, len);
         }
-        upgradeInfo.addBytesSent(len);
     }
 
 

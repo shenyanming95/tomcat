@@ -279,7 +279,7 @@ public final class MethodExpressionImpl extends MethodExpression implements
             ClassNotFoundException {
         this.expr = in.readUTF();
         String type = in.readUTF();
-        if (!type.isEmpty()) {
+        if (!"".equals(type)) {
             this.expectedType = ReflectionUtil.forName(type);
         }
         this.paramTypes = ReflectionUtil.toTypeArray(((String[]) in

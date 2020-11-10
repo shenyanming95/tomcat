@@ -30,6 +30,9 @@ import org.apache.tomcat.util.threads.TaskQueue;
 import org.apache.tomcat.util.threads.TaskThreadFactory;
 import org.apache.tomcat.util.threads.ThreadPoolExecutor;
 
+/**
+ * Tomcat 自定义的 {@link Executor}和{@link ResizableExecutor}的默认实现.
+ */
 public class StandardThreadExecutor extends LifecycleMBeanBase
         implements Executor, ResizableExecutor {
 
@@ -338,6 +341,8 @@ public class StandardThreadExecutor extends LifecycleMBeanBase
 
     @Override
     protected String getObjectNameKeyProperties() {
-        return "type=Executor,name=" + getName();
+        StringBuilder name = new StringBuilder("type=Executor,name=");
+        name.append(getName());
+        return name.toString();
     }
 }

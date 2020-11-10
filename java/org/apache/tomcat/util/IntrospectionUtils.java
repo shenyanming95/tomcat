@@ -60,10 +60,6 @@ public final class IntrospectionUtils {
             log.debug("IntrospectionUtils: setProperty(" +
                     o.getClass() + " " + name + "=" + value + ")");
 
-        if (actualMethod == null && XReflectionIntrospectionUtils.isEnabled()) {
-            return XReflectionIntrospectionUtils.setPropertyInternal(o, name, value, invokeSetProperty);
-        }
-
         String setter = "set" + capitalize(name);
 
         try {
@@ -226,9 +222,6 @@ public final class IntrospectionUtils {
     }
 
     public static Object getProperty(Object o, String name) {
-        if (XReflectionIntrospectionUtils.isEnabled()) {
-            return XReflectionIntrospectionUtils.getPropertyInternal(o, name);
-        }
         String getter = "get" + capitalize(name);
         String isGetter = "is" + capitalize(name);
 

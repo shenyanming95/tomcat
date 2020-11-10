@@ -17,7 +17,6 @@
 package org.apache.coyote.http2;
 
 import org.apache.coyote.ActionCode;
-import org.apache.coyote.Response;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.res.StringManager;
@@ -68,7 +67,7 @@ class WindowAllocationManager {
     void waitForStream(long timeout) throws InterruptedException {
         if (log.isDebugEnabled()) {
             log.debug(sm.getString("windowAllocationManager.waitFor.stream",
-                    stream.getConnectionId(), stream.getIdAsString(), Long.toString(timeout)));
+                    stream.getConnectionId(), stream.getIdentifier(), Long.toString(timeout)));
         }
 
         waitFor(STREAM, timeout);
@@ -78,7 +77,7 @@ class WindowAllocationManager {
     void waitForConnection(long timeout) throws InterruptedException {
         if (log.isDebugEnabled()) {
             log.debug(sm.getString("windowAllocationManager.waitFor.connection",
-                    stream.getConnectionId(), stream.getIdAsString(), Long.toString(timeout)));
+                    stream.getConnectionId(), stream.getIdentifier(), Long.toString(timeout)));
         }
 
         waitFor(CONNECTION, timeout);
@@ -88,7 +87,7 @@ class WindowAllocationManager {
     void waitForStreamNonBlocking() {
         if (log.isDebugEnabled()) {
             log.debug(sm.getString("windowAllocationManager.waitForNonBlocking.stream",
-                    stream.getConnectionId(), stream.getIdAsString()));
+                    stream.getConnectionId(), stream.getIdentifier()));
         }
 
         waitForNonBlocking(STREAM);
@@ -98,7 +97,7 @@ class WindowAllocationManager {
     void waitForConnectionNonBlocking() {
         if (log.isDebugEnabled()) {
             log.debug(sm.getString("windowAllocationManager.waitForNonBlocking.connection",
-                    stream.getConnectionId(), stream.getIdAsString()));
+                    stream.getConnectionId(), stream.getIdentifier()));
         }
 
         waitForNonBlocking(CONNECTION);
@@ -141,7 +140,7 @@ class WindowAllocationManager {
         synchronized (stream) {
             if (waitingFor != NONE) {
                 throw new IllegalStateException(sm.getString("windowAllocationManager.waitFor.ise",
-                        stream.getConnectionId(), stream.getIdAsString()));
+                        stream.getConnectionId(), stream.getIdentifier()));
             }
 
             waitingFor = waitTarget;
@@ -164,7 +163,7 @@ class WindowAllocationManager {
                 // Non-blocking post-processing may attempt to flush
             } else {
                 throw new IllegalStateException(sm.getString("windowAllocationManager.waitFor.ise",
-                        stream.getConnectionId(), stream.getIdAsString()));
+                        stream.getConnectionId(), stream.getIdentifier()));
             }
 
         }
@@ -174,7 +173,7 @@ class WindowAllocationManager {
     private void notify(int notifyTarget) {
         if (log.isDebugEnabled()) {
             log.debug(sm.getString("windowAllocationManager.notify", stream.getConnectionId(),
-                    stream.getIdAsString(), Integer.toString(waitingFor), Integer.toString(notifyTarget)));
+                    stream.getIdentifier(), Integer.toString(waitingFor), Integer.toString(notifyTarget)));
         }
 
         synchronized (stream) {
@@ -185,27 +184,24 @@ class WindowAllocationManager {
                 // to stream.notify(). Additional notify() calls may trigger
                 // unexpected timeouts.
                 waitingFor = NONE;
-                Response response = stream.getCoyoteResponse();
-                if (response != null) {
-                    if (response.getWriteListener() == null) {
-                        // Blocking, so use notify to release StreamOutputBuffer
-                        if (log.isDebugEnabled()) {
-                            log.debug(sm.getString("windowAllocationManager.notified",
-                                    stream.getConnectionId(), stream.getIdAsString()));
-                        }
-                        stream.notify();
-                    } else {
-                        // Non-blocking so dispatch
-                        if (log.isDebugEnabled()) {
-                            log.debug(sm.getString("windowAllocationManager.dispatched",
-                                    stream.getConnectionId(), stream.getIdAsString()));
-                        }
-                        response.action(ActionCode.DISPATCH_WRITE, null);
-                        // Need to explicitly execute dispatches on the StreamProcessor
-                        // as this thread is being processed by an UpgradeProcessor
-                        // which won't see this dispatch
-                        response.action(ActionCode.DISPATCH_EXECUTE, null);
+                if (stream.getCoyoteResponse().getWriteListener() == null) {
+                    // Blocking, so use notify to release StreamOutputBuffer
+                    if (log.isDebugEnabled()) {
+                        log.debug(sm.getString("windowAllocationManager.notified",
+                                stream.getConnectionId(), stream.getIdentifier()));
                     }
+                    stream.notify();
+                } else {
+                    // Non-blocking so dispatch
+                    if (log.isDebugEnabled()) {
+                        log.debug(sm.getString("windowAllocationManager.dispatched",
+                                stream.getConnectionId(), stream.getIdentifier()));
+                    }
+                    stream.getCoyoteResponse().action(ActionCode.DISPATCH_WRITE, null);
+                    // Need to explicitly execute dispatches on the StreamProcessor
+                    // as this thread is being processed by an UpgradeProcessor
+                    // which won't see this dispatch
+                    stream.getCoyoteResponse().action(ActionCode.DISPATCH_EXECUTE, null);
                 }
             }
         }

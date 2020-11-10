@@ -254,7 +254,7 @@ public class JMXAccessorTask extends BaseRedirectorHelperTask {
      * @return Returns the useRef.
      */
     public boolean isUseRef() {
-        return ref != null && !ref.isEmpty();
+        return ref != null && !"".equals(ref);
     }
 
     /**

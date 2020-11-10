@@ -71,7 +71,7 @@ public abstract class AbstractEndpoint<S,U> {
     public static interface Handler<S> {
 
         /**
-         * Different types of socket states to react upon.
+         * 不同类型的套接字状态可以做出反应。
          */
         public enum SocketState {
             // TODO Add a new state to the AsyncStateMachine and remove
@@ -1088,6 +1088,8 @@ public abstract class AbstractEndpoint<S,U> {
             if (socketWrapper == null) {
                 return false;
             }
+            // SocketProcessor复用, 先从缓存取出来实例, 如果为空, 就创建一个新的;
+            // 如果不为空, 则重置它
             SocketProcessorBase<S> sc = null;
             if (processorCache != null) {
                 sc = processorCache.pop();
@@ -1097,10 +1099,13 @@ public abstract class AbstractEndpoint<S,U> {
             } else {
                 sc.reset(socketWrapper, event);
             }
+            // 获取当前EndPoint的I/O线程池, 它是处理Socket的工作线程.
+            // 这边逻辑要转到SocketProcessor#doRun()中去
             Executor executor = getExecutor();
             if (dispatch && executor != null) {
                 executor.execute(sc);
             } else {
+                // 没配置线程池, 就直接运行
                 sc.run();
             }
         } catch (RejectedExecutionException ree) {
@@ -1150,7 +1155,9 @@ public abstract class AbstractEndpoint<S,U> {
 
 
     public final void init() throws Exception {
+        // 默认为true, 一旦初始化就开始绑定端口
         if (bindOnInit) {
+            // 绑定Endpoint底层的ServerSocket
             bindWithCleanup();
             bindState = BindState.BOUND_ON_INIT;
         }
@@ -1230,7 +1237,9 @@ public abstract class AbstractEndpoint<S,U> {
         startInternal();
     }
 
-
+    /**
+     * 启动Acceptor
+     */
     protected void startAcceptorThread() {
         acceptor = new Acceptor<>(this);
         String threadName = getName() + "-Acceptor";

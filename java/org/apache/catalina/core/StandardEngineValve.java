@@ -58,23 +58,22 @@ final class StandardEngineValve extends ValveBase {
     @Override
     public final void invoke(Request request, Response response)
         throws IOException, ServletException {
-
-        // Select the Host to be used for this Request
+        // 从这行代码可以看到, 其实Tomcat在进行调用pipeline处理的时候, 就已经将需要处理的Host确定好了,
         Host host = request.getHost();
         if (host == null) {
             // HTTP 0.9 or HTTP 1.0 request without a host when no default host
-            // is defined.
-            // Don't overwrite an existing error
-            if (!response.isError()) {
-                response.sendError(404);
-            }
+            // is defined. This is handled by the CoyoteAdapter.
             return;
         }
+        // 如果支持异步Servlet
         if (request.isAsyncSupported()) {
             request.setAsyncSupported(host.getPipeline().isAsyncSupported());
         }
-
-        // Ask this Host to process this request
+        // 调用子容器来处理这个请求, Engine的子容器就是Host.
+        // Host获取到的pipeline实例也是：org.apache.catalina.core.StandardPipeline,
+        // 它的basic: StandardHostValve, 它的Valve链为：
+        // AccessLogValve, ErrorReportValve, StandardHostValve
         host.getPipeline().getFirst().invoke(request, response);
+
     }
 }

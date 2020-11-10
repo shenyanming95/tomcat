@@ -25,8 +25,7 @@ import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.res.StringManager;
 
 /**
- * Base class for all streams including the connection (referred to as Stream 0)
- * and is used primarily when managing prioritization.
+ * Used to managed prioritisation.
  */
 abstract class AbstractStream {
 
@@ -34,26 +33,19 @@ abstract class AbstractStream {
     private static final StringManager sm = StringManager.getManager(AbstractStream.class);
 
     private final Integer identifier;
-    private final String idAsString;
 
     private volatile AbstractStream parentStream = null;
-    private final Set<AbstractNonZeroStream> childStreams = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<Stream> childStreams = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private long windowSize = ConnectionSettingsBase.DEFAULT_INITIAL_WINDOW_SIZE;
 
 
     AbstractStream(Integer identifier) {
         this.identifier = identifier;
-        this.idAsString = identifier.toString();
     }
 
 
     final Integer getIdentifier() {
         return identifier;
-    }
-
-
-    final String getIdAsString() {
-        return idAsString;
     }
 
 
@@ -70,7 +62,7 @@ abstract class AbstractStream {
     }
 
 
-    final void addChild(AbstractNonZeroStream child) {
+    final void addChild(Stream child) {
         child.setParentStream(this);
         childStreams.add(child);
     }
@@ -97,7 +89,7 @@ abstract class AbstractStream {
     }
 
 
-    final Set<AbstractNonZeroStream> getChildStreams() {
+    final Set<Stream> getChildStreams() {
         return childStreams;
     }
 
@@ -126,7 +118,7 @@ abstract class AbstractStream {
 
         if (log.isDebugEnabled()) {
             log.debug(sm.getString("abstractStream.windowSizeInc", getConnectionId(),
-                    getIdAsString(), Integer.toString(increment), Long.toString(windowSize)));
+                    getIdentifier(), Integer.toString(increment), Long.toString(windowSize)));
         }
 
         if (windowSize > ConnectionSettingsBase.MAX_WINDOW_SIZE) {
@@ -149,7 +141,7 @@ abstract class AbstractStream {
         windowSize -= decrement;
         if (log.isDebugEnabled()) {
             log.debug(sm.getString("abstractStream.windowSizeDec", getConnectionId(),
-                    getIdAsString(), Integer.toString(decrement), Long.toString(windowSize)));
+                    getIdentifier(), Integer.toString(decrement), Long.toString(windowSize)));
         }
     }
 

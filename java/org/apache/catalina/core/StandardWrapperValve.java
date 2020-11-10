@@ -91,9 +91,7 @@ final class StandardWrapperValve
      * @exception ServletException if a servlet error occurred
      */
     @Override
-    public final void invoke(Request request, Response response)
-        throws IOException, ServletException {
-
+    public final void invoke(Request request, Response response) throws IOException, ServletException {
         // Initialize local variables we may need
         boolean unavailable = false;
         Throwable throwable = null;
@@ -103,78 +101,65 @@ final class StandardWrapperValve
         StandardWrapper wrapper = (StandardWrapper) getContainer();
         Servlet servlet = null;
         Context context = (Context) wrapper.getParent();
-
-        // Check for the application being marked unavailable
+        // 检查 Context 组件
         if (!context.getState().isAvailable()) {
-            response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE,
-                           sm.getString("standardContext.isUnavailable"));
+            response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, sm.getString("standardContext.isUnavailable"));
             unavailable = true;
         }
-
-        // Check for the servlet being marked unavailable
+        // 检查 Servlet 组件
         if (!unavailable && wrapper.isUnavailable()) {
-            container.getLogger().info(sm.getString("standardWrapper.isUnavailable",
-                    wrapper.getName()));
+            container.getLogger().info(sm.getString("standardWrapper.isUnavailable", wrapper.getName()));
             long available = wrapper.getAvailable();
             if ((available > 0L) && (available < Long.MAX_VALUE)) {
                 response.setDateHeader("Retry-After", available);
-                response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE,
-                        sm.getString("standardWrapper.isUnavailable",
+                response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, sm.getString("standardWrapper.isUnavailable",
                                 wrapper.getName()));
             } else if (available == Long.MAX_VALUE) {
-                response.sendError(HttpServletResponse.SC_NOT_FOUND,
-                        sm.getString("standardWrapper.notFound",
-                                wrapper.getName()));
+                response.sendError(HttpServletResponse.SC_NOT_FOUND, sm.getString("standardWrapper.notFound", wrapper.getName()));
             }
             unavailable = true;
         }
-
-        // Allocate a servlet instance to process this request
         try {
             if (!unavailable) {
+                // 通过Wrapper获取一个Servlet实例
                 servlet = wrapper.allocate();
             }
         } catch (UnavailableException e) {
-            container.getLogger().error(
-                    sm.getString("standardWrapper.allocateException",
-                            wrapper.getName()), e);
+            // 404
+            container.getLogger().error(sm.getString("standardWrapper.allocateException", wrapper.getName()), e);
             long available = wrapper.getAvailable();
             if ((available > 0L) && (available < Long.MAX_VALUE)) {
                 response.setDateHeader("Retry-After", available);
-                response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE,
-                           sm.getString("standardWrapper.isUnavailable",
-                                        wrapper.getName()));
+                response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, sm.getString("standardWrapper.isUnavailable", wrapper.getName()));
             } else if (available == Long.MAX_VALUE) {
-                response.sendError(HttpServletResponse.SC_NOT_FOUND,
-                           sm.getString("standardWrapper.notFound",
-                                        wrapper.getName()));
+                response.sendError(HttpServletResponse.SC_NOT_FOUND, sm.getString("standardWrapper.notFound", wrapper.getName()));
             }
         } catch (ServletException e) {
-            container.getLogger().error(sm.getString("standardWrapper.allocateException",
-                             wrapper.getName()), StandardWrapper.getRootCause(e));
+            // 分配失败
+            container.getLogger().error(sm.getString("standardWrapper.allocateException", wrapper.getName()), StandardWrapper.getRootCause(e));
             throwable = e;
             exception(request, response, e);
         } catch (Throwable e) {
+            // 分配失败
             ExceptionUtils.handleThrowable(e);
-            container.getLogger().error(sm.getString("standardWrapper.allocateException",
-                             wrapper.getName()), e);
+            container.getLogger().error(sm.getString("standardWrapper.allocateException", wrapper.getName()), e);
             throwable = e;
             exception(request, response, e);
             servlet = null;
         }
-
+        // 请求调度的状态/路径
         MessageBytes requestPathMB = request.getRequestPathMB();
         DispatcherType dispatcherType = DispatcherType.REQUEST;
-        if (request.getDispatcherType()==DispatcherType.ASYNC) dispatcherType = DispatcherType.ASYNC;
-        request.setAttribute(Globals.DISPATCHER_TYPE_ATTR,dispatcherType);
-        request.setAttribute(Globals.DISPATCHER_REQUEST_PATH_ATTR,
-                requestPathMB);
-        // Create the filter chain for this request
-        ApplicationFilterChain filterChain =
-                ApplicationFilterFactory.createFilterChain(request, wrapper, servlet);
+        if (request.getDispatcherType() == DispatcherType.ASYNC) {
+            dispatcherType = DispatcherType.ASYNC;
+        }
+        request.setAttribute(Globals.DISPATCHER_TYPE_ATTR, dispatcherType);
+        request.setAttribute(Globals.DISPATCHER_REQUEST_PATH_ATTR, requestPathMB);
 
-        // Call the filter chain for this request
-        // NOTE: This also calls the servlet's service() method
+        // 创建Servlet核心组件之一Filter, 拦截器链
+        ApplicationFilterChain filterChain = ApplicationFilterFactory.createFilterChain(request, wrapper, servlet);
+
+        // 调用当前Request的过滤器链, 最终会调用Servlet的service()方法
         Container container = this.container;
         try {
             if ((servlet != null) && (filterChain != null)) {
@@ -183,10 +168,11 @@ final class StandardWrapperValve
                     try {
                         SystemLogHandler.startCapture();
                         if (request.isAsyncDispatching()) {
+                            // 异步请求
                             request.getAsyncContextInternal().doInternalDispatch();
                         } else {
-                            filterChain.doFilter(request.getRequest(),
-                                    response.getResponse());
+                            // 同步请求
+                            filterChain.doFilter(request.getRequest(), response.getResponse());
                         }
                     } finally {
                         String log = SystemLogHandler.stopCapture();
@@ -196,10 +182,11 @@ final class StandardWrapperValve
                     }
                 } else {
                     if (request.isAsyncDispatching()) {
+                        // 异步请求
                         request.getAsyncContextInternal().doInternalDispatch();
                     } else {
-                        filterChain.doFilter
-                            (request.getRequest(), response.getResponse());
+                        // 同步请求
+                        filterChain.doFilter(request.getRequest(), response.getResponse());
                     }
                 }
 
@@ -256,12 +243,11 @@ final class StandardWrapperValve
             throwable = e;
             exception(request, response, e);
         } finally {
-            // Release the filter chain (if any) for this request
+            // 调用完以后，释放整个拦截器链
             if (filterChain != null) {
                 filterChain.release();
             }
-
-            // Deallocate the allocated servlet instance
+            // 取消分配已分配的servlet实例
             try {
                 if (servlet != null) {
                     wrapper.deallocate(servlet);
@@ -275,9 +261,7 @@ final class StandardWrapperValve
                     exception(request, response, e);
                 }
             }
-
-            // If this servlet has been marked permanently unavailable,
-            // unload it and release this instance
+            // 如果此Servlet被标记为永久不可用，请卸载它并释放该实例
             try {
                 if ((servlet != null) &&
                     (wrapper.getAvailable() == Long.MAX_VALUE)) {

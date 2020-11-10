@@ -35,7 +35,6 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.coyote.AbstractProcessor;
 import org.apache.coyote.ActionCode;
 import org.apache.coyote.Adapter;
-import org.apache.coyote.ContinueResponseTiming;
 import org.apache.coyote.ErrorState;
 import org.apache.coyote.InputBuffer;
 import org.apache.coyote.OutputBuffer;
@@ -1057,7 +1056,7 @@ public class AjpProcessor extends AbstractProcessor {
 
 
     @Override
-    protected final void ack(ContinueResponseTiming continueResponseTiming) {
+    protected final void ack() {
         // NO-OP for AJP
     }
 
@@ -1080,7 +1079,7 @@ public class AjpProcessor extends AbstractProcessor {
         if (empty) {
             return 0;
         } else {
-            return request.getInputBuffer().available();
+            return bodyBytes.getByteChunk().getLength();
         }
     }
 
@@ -1301,15 +1300,6 @@ public class AjpProcessor extends AbstractProcessor {
             handler.setByteBuffer(ByteBuffer.wrap(bc.getBuffer(), bc.getStart(), bc.getLength()));
             empty = true;
             return handler.getByteBuffer().remaining();
-        }
-
-        @Override
-        public int available() {
-            if (empty) {
-                return 0;
-            } else {
-                return bodyBytes.getByteChunk().getLength();
-            }
         }
     }
 

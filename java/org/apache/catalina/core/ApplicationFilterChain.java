@@ -16,10 +16,10 @@
  */
 package org.apache.catalina.core;
 
-import java.io.IOException;
-import java.security.Principal;
-import java.security.PrivilegedActionException;
-import java.util.Set;
+import org.apache.catalina.Globals;
+import org.apache.catalina.security.SecurityUtil;
+import org.apache.tomcat.util.ExceptionUtils;
+import org.apache.tomcat.util.res.StringManager;
 
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
@@ -29,11 +29,11 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
-import org.apache.catalina.Globals;
-import org.apache.catalina.security.SecurityUtil;
-import org.apache.tomcat.util.ExceptionUtils;
-import org.apache.tomcat.util.res.StringManager;
+import java.io.IOException;
+import java.security.Principal;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Set;
 
 /**
  * Implementation of <code>javax.servlet.FilterChain</code> used to manage
@@ -101,8 +101,7 @@ public final class ApplicationFilterChain implements FilterChain {
     /**
      * The string manager for our package.
      */
-    private static final StringManager sm =
-      StringManager.getManager(Constants.Package);
+    private static final StringManager sm = StringManager.getManager(Constants.Package);
 
 
     /**
@@ -110,14 +109,14 @@ public final class ApplicationFilterChain implements FilterChain {
      * <code>doFilter</code> is invoked.
      */
     private static final Class<?>[] classType = new Class[]{
-        ServletRequest.class, ServletResponse.class, FilterChain.class};
+            ServletRequest.class, ServletResponse.class, FilterChain.class};
 
     /**
      * Static class array used when the SecurityManager is turned on and
      * <code>service</code> is invoked.
      */
     private static final Class<?>[] classTypeUsedInService = new Class[]{
-        ServletRequest.class, ServletResponse.class};
+            ServletRequest.class, ServletResponse.class};
 
 
     // ---------------------------------------------------- FilterChain Methods
@@ -127,31 +126,26 @@ public final class ApplicationFilterChain implements FilterChain {
      * and response.  If there are no more filters in this chain, invoke
      * the <code>service()</code> method of the servlet itself.
      *
-     * @param request The servlet request we are processing
+     * @param request  The servlet request we are processing
      * @param response The servlet response we are creating
-     *
-     * @exception IOException if an input/output error occurs
-     * @exception ServletException if a servlet exception occurs
+     * @throws IOException      if an input/output error occurs
+     * @throws ServletException if a servlet exception occurs
      */
     @Override
     public void doFilter(ServletRequest request, ServletResponse response)
-        throws IOException, ServletException {
-
-        if( Globals.IS_SECURITY_ENABLED ) {
+            throws IOException, ServletException {
+        // 如果开启了安全检测, 就使用安全控制器处理
+        if (Globals.IS_SECURITY_ENABLED) {
             final ServletRequest req = request;
             final ServletResponse res = response;
             try {
                 java.security.AccessController.doPrivileged(
-                    new java.security.PrivilegedExceptionAction<Void>() {
-                        @Override
-                        public Void run()
-                            throws ServletException, IOException {
-                            internalDoFilter(req,res);
+                        (PrivilegedExceptionAction<Void>) () -> {
+                            internalDoFilter(req, res);
                             return null;
                         }
-                    }
                 );
-            } catch( PrivilegedActionException pe) {
+            } catch (PrivilegedActionException pe) {
                 Exception e = pe.getException();
                 if (e instanceof ServletException)
                     throw (ServletException) e;
@@ -163,33 +157,40 @@ public final class ApplicationFilterChain implements FilterChain {
                     throw new ServletException(e.getMessage(), e);
             }
         } else {
-            internalDoFilter(request,response);
+            // 没有就直接调用此方法
+            internalDoFilter(request, response);
         }
     }
 
-    private void internalDoFilter(ServletRequest request,
-                                  ServletResponse response)
-        throws IOException, ServletException {
-
-        // Call the next filter if there is one
+    /**
+     * 真正处理请求的拦截器链
+     *
+     * @param request  请求
+     * @param response 响应
+     * @throws IOException
+     * @throws ServletException
+     */
+    private void internalDoFilter(ServletRequest request, ServletResponse response)
+            throws IOException, ServletException {
+        // pos, 表示拦截器链内下一个要调用的Filter的位置
+        // n, 表示拦截器链内的Filter的总数量
+        // 所以每调用一次Filter.doFilter()方法, pos就会加1, 就会调用下一个Filter
         if (pos < n) {
             ApplicationFilterConfig filterConfig = filters[pos++];
             try {
                 Filter filter = filterConfig.getFilter();
-
                 if (request.isAsyncSupported() && "false".equalsIgnoreCase(
                         filterConfig.getFilterDef().getAsyncSupported())) {
                     request.setAttribute(Globals.ASYNC_SUPPORTED_ATTR, Boolean.FALSE);
                 }
-                if( Globals.IS_SECURITY_ENABLED ) {
+                if (Globals.IS_SECURITY_ENABLED) {
                     final ServletRequest req = request;
                     final ServletResponse res = response;
-                    Principal principal =
-                        ((HttpServletRequest) req).getUserPrincipal();
-
+                    Principal principal = ((HttpServletRequest) req).getUserPrincipal();
                     Object[] args = new Object[]{req, res, this};
-                    SecurityUtil.doAsPrivilege ("doFilter", filter, classType, args, principal);
+                    SecurityUtil.doAsPrivilege("doFilter", filter, classType, args, principal);
                 } else {
+                    // 执行拦截器逻辑
                     filter.doFilter(request, response, this);
                 }
             } catch (IOException | ServletException | RuntimeException e) {
@@ -199,35 +200,33 @@ public final class ApplicationFilterChain implements FilterChain {
                 ExceptionUtils.handleThrowable(e);
                 throw new ServletException(sm.getString("filterChain.filter"), e);
             }
+            // 如果吼, 调用完一个Filter没有在执行chain.doFilter(), 那方法就会来到这里, 执行return语句, 将此方法返回回去.
             return;
         }
-
-        // We fell off the end of the chain -- call the servlet instance
+        // 代码执行到这边, 表示已经调用到Filter的末尾, 所以直接调用Servlet.service()方法.
         try {
             if (ApplicationDispatcher.WRAP_SAME_OBJECT) {
                 lastServicedRequest.set(request);
                 lastServicedResponse.set(response);
             }
-
             if (request.isAsyncSupported() && !servletSupportsAsync) {
-                request.setAttribute(Globals.ASYNC_SUPPORTED_ATTR,
-                        Boolean.FALSE);
+                request.setAttribute(Globals.ASYNC_SUPPORTED_ATTR, Boolean.FALSE);
             }
             // Use potentially wrapped request from this point
             if ((request instanceof HttpServletRequest) &&
                     (response instanceof HttpServletResponse) &&
-                    Globals.IS_SECURITY_ENABLED ) {
+                    Globals.IS_SECURITY_ENABLED) {
                 final ServletRequest req = request;
                 final ServletResponse res = response;
-                Principal principal =
-                    ((HttpServletRequest) req).getUserPrincipal();
+                Principal principal = ((HttpServletRequest) req).getUserPrincipal();
                 Object[] args = new Object[]{req, res};
                 SecurityUtil.doAsPrivilege("service",
-                                           servlet,
-                                           classTypeUsedInService,
-                                           args,
-                                           principal);
+                        servlet,
+                        classTypeUsedInService,
+                        args,
+                        principal);
             } else {
+                // 真正执行Servlet逻辑
                 servlet.service(request, response);
             }
         } catch (IOException | ServletException | RuntimeException e) {
@@ -277,13 +276,13 @@ public final class ApplicationFilterChain implements FilterChain {
     void addFilter(ApplicationFilterConfig filterConfig) {
 
         // Prevent the same filter being added multiple times
-        for(ApplicationFilterConfig filter:filters)
-            if(filter==filterConfig)
+        for (ApplicationFilterConfig filter : filters)
+            if (filter == filterConfig)
                 return;
 
         if (n == filters.length) {
             ApplicationFilterConfig[] newFilters =
-                new ApplicationFilterConfig[n + INCREMENT];
+                    new ApplicationFilterConfig[n + INCREMENT];
             System.arraycopy(filters, 0, newFilters, 0, n);
             filters = newFilters;
         }
@@ -338,7 +337,7 @@ public final class ApplicationFilterChain implements FilterChain {
      *               be added
      */
     public void findNonAsyncFilters(Set<String> result) {
-        for (int i = 0; i < n ; i++) {
+        for (int i = 0; i < n; i++) {
             ApplicationFilterConfig filter = filters[i];
             if ("false".equalsIgnoreCase(filter.getFilterDef().getAsyncSupported())) {
                 result.add(filter.getFilterClass());

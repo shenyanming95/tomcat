@@ -100,7 +100,7 @@ public class WebdavFixFilter extends GenericFilter {
             httpResponse.sendRedirect(buildRedirect(httpRequest));
         } else if (ua.startsWith(UA_MINIDIR_5_2_3790)) {
             // XP 64-bit SP2
-            if (!httpRequest.getContextPath().isEmpty()) {
+            if (!"".equals(httpRequest.getContextPath())) {
                 getServletContext().log(sm.getString("webDavFilter.xpRootContext"));
             }
             // Namespace issue maybe

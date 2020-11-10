@@ -16,12 +16,11 @@
  */
 package org.apache.catalina;
 
-import java.io.IOException;
-
-import javax.servlet.ServletException;
-
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
+
+import javax.servlet.ServletException;
+import java.io.IOException;
 
 /**
  * <p>A <b>Valve</b> is a request processing component associated with a
@@ -32,6 +31,8 @@ import org.apache.catalina.connector.Response;
  * <b>HISTORICAL NOTE</b>:  The "Valve" name was assigned to this concept
  * because a valve is what you use in a real world pipeline to control and/or
  * modify flows through it.
+ * <p>
+ * 也就是说{@link Valve}是用来处理{@link Request}的组件, 多个{@link Valve}会组成一个{@link Pipeline}
  *
  * @author Craig R. McClanahan
  * @author Gunnar Rjnning
@@ -43,80 +44,55 @@ public interface Valve {
     //-------------------------------------------------------------- Properties
 
     /**
-     * @return the next Valve in the pipeline containing this Valve, if any.
+     * 获取pipeline中的下一个Valve
      */
-    public Valve getNext();
+     Valve getNext();
 
 
     /**
-     * Set the next Valve in the pipeline containing this Valve.
+     * 设置下一个Valve
      *
      * @param valve The new next valve, or <code>null</code> if none
      */
-    public void setNext(Valve valve);
+     void setNext(Valve valve);
 
 
     //---------------------------------------------------------- Public Methods
 
 
     /**
-     * Execute a periodic task, such as reloading, etc. This method will be
-     * invoked inside the classloading context of this container. Unexpected
-     * throwables will be caught and logged.
+     * 执行周期性任务，例如重新加载，等等此方法将在此容器的类加载上下文内被调用。
+     * 意外抛出异常都会被捕获并记录
      */
-    public void backgroundProcess();
+     void backgroundProcess();
 
 
     /**
-     * <p>Perform request processing as required by this Valve.</p>
+     * 执行Request请求, 一个Valve可以执行以下操作, 并按照指定的顺序：
+     * 1.检查/修改指定的Request和Response的属性;
+     * 2.检查指定Request的属性，完全生成相应的Response，并将控制权返回给调用者;
+     * 3.检查指定Request和Response的属性, 包装这两个对象中的一个或两个以补充其功能，然后将其传递;
+     * 4.如果相应的Response未生成, 即Controller不返回, 如果存在下一个Valve, 通过{@link #getNext()}获取pipeline的下一个Valve, 然后调用{@link #invoke(Request, Response)}执行
+     * 5.检查但不能修改, 作为响应结果的Response, 它是由随后调用的Valve或Container创建的
      *
-     * <p>An individual Valve <b>MAY</b> perform the following actions, in
-     * the specified order:</p>
-     * <ul>
-     * <li>Examine and/or modify the properties of the specified Request and
-     *     Response.
-     * <li>Examine the properties of the specified Request, completely generate
-     *     the corresponding Response, and return control to the caller.
-     * <li>Examine the properties of the specified Request and Response, wrap
-     *     either or both of these objects to supplement their functionality,
-     *     and pass them on.
-     * <li>If the corresponding Response was not generated (and control was not
-     *     returned, call the next Valve in the pipeline (if there is one) by
-     *     executing <code>getNext().invoke()</code>.
-     * <li>Examine, but not modify, the properties of the resulting Response
-     *     (which was created by a subsequently invoked Valve or Container).
-     * </ul>
+     * 一个Valve不能执行如下事情：
+     * 1.更改已经用于指导此请求的处理控制流的请求属性（例如，在标准实现中，尝试更改应从连接到主机或上下文的管道向其发送请求的虚拟主机）
+     * 2.创建一个完整的Response, 并将Request和Response传递到管道中的下一个Valve
+     * 3.从与Request相关联的输入流中消耗字节，除非它完全生成了响应，或者在将请求传递之前包装了请求
+     * 4.{@link #getNext()}/{@link #invoke(Request, Response)}执行后, 修改Response的HTTP返回头信息
+     * 4.{@link #getNext()}/{@link #invoke(Request, Response)}执行后, 对与指定Response关联的输出流执行任何操作
      *
-     * <p>A Valve <b>MUST NOT</b> do any of the following things:</p>
-     * <ul>
-     * <li>Change request properties that have already been used to direct
-     *     the flow of processing control for this request (for instance,
-     *     trying to change the virtual host to which a Request should be
-     *     sent from a pipeline attached to a Host or Context in the
-     *     standard implementation).
-     * <li>Create a completed Response <strong>AND</strong> pass this
-     *     Request and Response on to the next Valve in the pipeline.
-     * <li>Consume bytes from the input stream associated with the Request,
-     *     unless it is completely generating the response, or wrapping the
-     *     request before passing it on.
-     * <li>Modify the HTTP headers included with the Response after the
-     *     <code>getNext().invoke()</code> method has returned.
-     * <li>Perform any actions on the output stream associated with the
-     *     specified Response after the <code>getNext().invoke()</code> method has
-     *     returned.
-     * </ul>
-     *
-     * @param request The servlet request to be processed
+     * @param request  The servlet request to be processed
      * @param response The servlet response to be created
-     *
-     * @exception IOException if an input/output error occurs, or is thrown
-     *  by a subsequently invoked Valve, Filter, or Servlet
-     * @exception ServletException if a servlet error occurs, or is thrown
-     *  by a subsequently invoked Valve, Filter, or Servlet
+     * @throws IOException      if an input/output error occurs, or is thrown
+     *                          by a subsequently invoked Valve, Filter, or Servlet
+     * @throws ServletException if a servlet error occurs, or is thrown
+     *                          by a subsequently invoked Valve, Filter, or Servlet
      */
-    public void invoke(Request request, Response response)
-        throws IOException, ServletException;
+     void invoke(Request request, Response response) throws IOException, ServletException;
 
-
-    public boolean isAsyncSupported();
+    /**
+     * 是否支持异步
+     */
+    boolean isAsyncSupported();
 }

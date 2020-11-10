@@ -55,19 +55,26 @@ public final class Bootstrap {
     private static final Object daemonLock = new Object();
     private static volatile Bootstrap daemon = null;
 
+    // catalina目录
     private static final File catalinaBaseFile;
     private static final File catalinaHomeFile;
 
     private static final Pattern PATH_PATTERN = Pattern.compile("(\"[^\"]*\")|(([^,])*)");
 
+    // 静态块要做的事：就是确定catalina的目录地址, 里面需要有一个/conf配置文件
     static {
-        // Will always be non-null
+        // main()方法启动的根目录
         String userDir = System.getProperty("user.dir");
 
-        // Home first
+        // TODO 手动设置catalina的目录地址
+        System.setProperty(Constants.CATALINA_HOME_PROP, userDir.concat("/home"));
+
+        // 获取catalina目录(系统变量获取)
+        // 这边配置的是：/Users/shenyanming/sym_java/shenyanming_tomcat/java/home
         String home = System.getProperty(Constants.CATALINA_HOME_PROP);
         File homeFile = null;
 
+        // 获取文件描述符
         if (home != null) {
             File f = new File(home);
             try {
@@ -141,11 +148,15 @@ public final class Bootstrap {
 
     private void initClassLoaders() {
         try {
+            // 默认情况下, 只会创建 commonLoader(类型为URLClassLoader), 而且它的父类加载器置为null,
+            // 意味着没有双亲委派加载
             commonLoader = createClassLoader("common", null);
             if (commonLoader == null) {
                 // no config file, default to this loader - we might be in a 'single' env.
                 commonLoader = this.getClass().getClassLoader();
             }
+            // catalina.properties 默认不会配置 "server.loader" 和 "shard.loader",
+            // 所以它们直接就是取 commonLoader
             catalinaLoader = createClassLoader("server", commonLoader);
             sharedLoader = createClassLoader("shared", commonLoader);
         } catch (Throwable t) {
@@ -159,14 +170,17 @@ public final class Bootstrap {
     private ClassLoader createClassLoader(String name, ClassLoader parent)
         throws Exception {
 
+        // 从catalina.properties文件中, 找出 common.loader 的配置
         String value = CatalinaProperties.getProperty(name + ".loader");
         if ((value == null) || (value.equals("")))
             return parent;
 
+        // 将 ${catalina.base}、${catalina.home} 替换成真实路径地址
         value = replace(value);
 
         List<Repository> repositories = new ArrayList<>();
 
+        // 分割目录路径, 一般是按照逗号分割即可
         String[] repositoryPaths = getPaths(value);
 
         for (String repository : repositoryPaths) {
@@ -192,6 +206,7 @@ public final class Bootstrap {
             }
         }
 
+        // 创建的是 java.net.URLClassLoader对象, 它支持从 文件、jar包、http服务器 加载类
         return ClassLoaderFactory.createClassLoader(repositories, parent);
     }
 
@@ -248,36 +263,44 @@ public final class Bootstrap {
      */
     public void init() throws Exception {
 
+        // 创建tomcat的类加载器
         initClassLoaders();
 
+        // 设置当前线程的类加载器
         Thread.currentThread().setContextClassLoader(catalinaLoader);
 
+        // 如果系统设置了 SecurityManager, tomcat会使用上面创建好的 ClassLoader, 重新加载
+        // org.apache.catalina/..下的部分类
         SecurityClassLoad.securityClassLoad(catalinaLoader);
 
         // Load our startup class and call its process() method
         if (log.isDebugEnabled())
             log.debug("Loading startup class");
+
+        // 加载 Catalina 类, 并实例化它, 用来启动tomcat
         Class<?> startupClass = catalinaLoader.loadClass("org.apache.catalina.startup.Catalina");
         Object startupInstance = startupClass.getConstructor().newInstance();
 
         // Set the shared extensions class loader
         if (log.isDebugEnabled())
             log.debug("Setting startup class properties");
+
+        // 调用 org.apache.catalina.startup.Catalina#setParentClassLoader()方法, 设置它的类加载器
         String methodName = "setParentClassLoader";
-        Class<?> paramTypes[] = new Class[1];
+        Class<?>[] paramTypes = new Class[1];
         paramTypes[0] = Class.forName("java.lang.ClassLoader");
-        Object paramValues[] = new Object[1];
+        Object[] paramValues = new Object[1];
         paramValues[0] = sharedLoader;
-        Method method =
-            startupInstance.getClass().getMethod(methodName, paramTypes);
+        Method method = startupInstance.getClass().getMethod(methodName, paramTypes);
         method.invoke(startupInstance, paramValues);
 
+        // 赋值
         catalinaDaemon = startupInstance;
     }
 
 
     /**
-     * Load daemon.
+     * 其实就是反射调用{@link Catalina#load(String[])}方法
      */
     private void load(String[] arguments) throws Exception {
 
@@ -401,8 +424,7 @@ public final class Bootstrap {
         paramTypes[0] = Boolean.TYPE;
         Object paramValues[] = new Object[1];
         paramValues[0] = Boolean.valueOf(await);
-        Method method =
-            catalinaDaemon.getClass().getMethod("setAwait", paramTypes);
+        Method method = catalinaDaemon.getClass().getMethod("setAwait", paramTypes);
         method.invoke(catalinaDaemon, paramValues);
     }
 
@@ -427,18 +449,18 @@ public final class Bootstrap {
 
 
     /**
-     * Main method and entry point when starting Tomcat via the provided
-     * scripts.
+     * 启动tomcat的main()方法
      *
      * @param args Command line arguments to be processed
      */
-    public static void main(String args[]) {
+    public static void main(String[] args) {
 
         synchronized (daemonLock) {
             if (daemon == null) {
                 // Don't set daemon until init() has completed
                 Bootstrap bootstrap = new Bootstrap();
                 try {
+                    // 初始化tomcat自己的类加载器、实例化catalina等
                     bootstrap.init();
                 } catch (Throwable t) {
                     handleThrowable(t);
@@ -455,11 +477,17 @@ public final class Bootstrap {
         }
 
         try {
+            // 默认的启动命令为 start
             String command = "start";
+
+            // 如果有外部命令, 则取外部命令
             if (args.length > 0) {
                 command = args[args.length - 1];
             }
 
+            /*
+             * tomcat一键启停...架构设计
+             */
             if (command.equals("startd")) {
                 args[args.length - 1] = "start";
                 daemon.load(args);
@@ -468,8 +496,16 @@ public final class Bootstrap {
                 args[args.length - 1] = "stop";
                 daemon.stop();
             } else if (command.equals("start")) {
+                // tomcat服务的启动入口点
+
+                // 设置 org.apache.catalina.startup.Catalina 的 await 属性为true. 因为tomcat默认会在8005开一个ServerSocket用于管理tomcat服务
+                // 所以会让tomcat服务在那个端口上等待, 前提是这个 await 属性值要为true.
                 daemon.setAwait(true);
+
+                // 先加载：调用 org.apache.catalina.startup.Catalina#load() 方法
                 daemon.load(args);
+
+                // 再启动：调用 org.apache.catalina.startup.Catalina#start() 方法
                 daemon.start();
                 if (null == daemon.getServer()) {
                     System.exit(1);

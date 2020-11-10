@@ -202,10 +202,6 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
             Set<URI> redirectSet)
             throws DeploymentException {
 
-        if (log.isDebugEnabled()) {
-            log.debug(sm.getString("wsWebSocketContainer.connect.entry", endpoint.getClass().getName(), path));
-        }
-
         boolean secure = false;
         ByteBuffer proxyConnect = null;
         URI proxyPath;
@@ -349,16 +345,6 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
             Future<Void> fHandshake = channel.handshake();
             fHandshake.get(timeout, TimeUnit.MILLISECONDS);
 
-            if (log.isDebugEnabled()) {
-                SocketAddress localAddress = null;
-                try {
-                    localAddress = channel.getLocalAddress();
-                } catch (IOException ioe) {
-                    // Ignore
-                }
-                log.debug(sm.getString("wsWebSocketContainer.connect.write",
-                        Integer.valueOf(request.position()), Integer.valueOf(request.limit()), localAddress));
-            }
             writeRequest(channel, request, timeout);
 
             HttpResponse httpResponse = processResponse(response, channel, timeout);
@@ -733,8 +719,7 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
 
         // Request line
         result.put(GET_BYTES);
-        final String path = uri.getPath();
-        if (null == path || path.isEmpty()) {
+        if (null == uri.getPath() || "".equals(uri.getPath())) {
             result.put(ROOT_URI_BYTES);
         } else {
             result.put(uri.getRawPath().getBytes(StandardCharsets.ISO_8859_1));
@@ -815,17 +800,9 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
             response.clear();
             // Blocking read
             Future<Integer> read = channel.read(response);
-            Integer bytesRead;
-            try {
-                bytesRead = read.get(timeout, TimeUnit.MILLISECONDS);
-            } catch (TimeoutException e) {
-                TimeoutException te = new TimeoutException(
-                        sm.getString("wsWebSocketContainer.responseFail", Integer.toString(status), headers));
-                te.initCause(e);
-                throw te;
-            }
+            Integer bytesRead = read.get(timeout, TimeUnit.MILLISECONDS);
             if (bytesRead.intValue() == -1) {
-                throw new EOFException(sm.getString("wsWebSocketContainer.responseFail", Integer.toString(status), headers));
+                throw new EOFException();
             }
             response.flip();
             while (response.hasRemaining() && !readHeaders) {

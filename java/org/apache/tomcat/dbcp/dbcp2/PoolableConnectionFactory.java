@@ -84,8 +84,6 @@ public class PoolableConnectionFactory implements PooledObjectFactory<PoolableCo
 
     private boolean poolStatements;
 
-    private boolean clearStatementPoolOnReturn;
-
     private int maxOpenPreparedStatements = GenericKeyedObjectPoolConfig.DEFAULT_MAX_TOTAL_PER_KEY;
 
     private long maxConnLifetimeMillis = -1;
@@ -394,7 +392,6 @@ public class PoolableConnectionFactory implements PooledObjectFactory<PoolableCo
             final KeyedObjectPool<PStmtKey, DelegatingPreparedStatement> stmtPool = new GenericKeyedObjectPool<>(
                     poolingConn, config);
             poolingConn.setStatementPool(stmtPool);
-            poolingConn.setClearStatementPoolOnReturn(clearStatementPoolOnReturn);
             poolingConn.setCacheState(cacheState);
         }
 
@@ -598,17 +595,6 @@ public class PoolableConnectionFactory implements PooledObjectFactory<PoolableCo
 
     public void setPoolStatements(final boolean poolStatements) {
         this.poolStatements = poolStatements;
-    }
-
-    /**
-     * Sets whether the pool of statements (which was enabled with {@link #setPoolStatements(boolean)}) should
-     * be cleared when the connection is returned to its pool. Default is false.
-     *
-     * @param clearStatementPoolOnReturn clear or not
-     * @since 2.8.0
-     */
-    public void setClearStatementPoolOnReturn(final boolean clearStatementPoolOnReturn) {
-        this.clearStatementPoolOnReturn = clearStatementPoolOnReturn;
     }
 
     public void setRollbackOnReturn(final boolean rollbackOnReturn) {

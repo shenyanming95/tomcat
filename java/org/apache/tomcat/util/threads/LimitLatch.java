@@ -42,10 +42,13 @@ public class LimitLatch {
         protected int tryAcquireShared(int ignored) {
             long newCount = count.incrementAndGet();
             if (!released && newCount > limit) {
-                // Limit exceeded
+                // 如果已经达到最大值, 值减一, 然后返回-1.
+                // 其实还不如直接判断, 不够就返回?还可以少进行一次+1和-1的操作?
+                // 其实不是, tomcat开发者, 可能认为大部分情况下都是+1且不会超过Limit的情况, 所以它都是一进来就+1
                 count.decrementAndGet();
                 return -1;
             } else {
+                //
                 return 1;
             }
         }
@@ -59,7 +62,7 @@ public class LimitLatch {
 
     private final Sync sync;
     private final AtomicLong count;
-    private volatile long limit;
+    private volatile long limit; //默认8192
     private volatile boolean released = false;
 
     /**

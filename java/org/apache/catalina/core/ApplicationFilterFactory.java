@@ -40,24 +40,19 @@ public final class ApplicationFilterFactory {
 
 
     /**
-     * Construct a FilterChain implementation that will wrap the execution of
-     * the specified servlet instance.
+     * 构造一个FilterChain实现，该实现将包装指定servlet实例的执行。
      *
-     * @param request The servlet request we are processing
-     * @param wrapper The wrapper managing the servlet instance
-     * @param servlet The servlet instance to be wrapped
+     * @param request 当前要处理的请求
+     * @param wrapper 管理Servlet实例的Wrapper实例
+     * @param servlet 实际Servlet(被Wrapper管理的)
      *
-     * @return The configured FilterChain instance or null if none is to be
-     *         executed.
+     * @return The configured FilterChain instance or null if none is to be executed.
      */
-    public static ApplicationFilterChain createFilterChain(ServletRequest request,
-            Wrapper wrapper, Servlet servlet) {
-
+    public static ApplicationFilterChain createFilterChain(ServletRequest request, Wrapper wrapper, Servlet servlet) {
         // If there is no servlet to execute, return null
         if (servlet == null)
             return null;
-
-        // Create and initialize a filter chain object
+        // 创建和初始化拦截器链
         ApplicationFilterChain filterChain = null;
         if (request instanceof Request) {
             Request req = (Request) request;
@@ -75,57 +70,56 @@ public final class ApplicationFilterFactory {
             // Request dispatcher in use
             filterChain = new ApplicationFilterChain();
         }
-
+        // 拦截器设置Servlet实例和是否支持异步
         filterChain.setServlet(servlet);
         filterChain.setServletSupportsAsync(wrapper.isAsyncSupported());
 
-        // Acquire the filter mappings for this Context
+        // 获取此StandardContext的过滤器映射, 就是配置在web.xml的filter标签
         StandardContext context = (StandardContext) wrapper.getParent();
-        FilterMap filterMaps[] = context.findFilterMaps();
+        FilterMap[] filterMaps = context.findFilterMaps();
 
-        // If there are no filter mappings, we are done
+        // 如果没有设置拦截器, 那就直接返回喽
         if ((filterMaps == null) || (filterMaps.length == 0))
             return filterChain;
 
-        // Acquire the information we will need to match filter mappings
-        DispatcherType dispatcher =
-                (DispatcherType) request.getAttribute(Globals.DISPATCHER_TYPE_ATTR);
+        // 获取需要匹配过滤器映射的信息
+        DispatcherType dispatcher = (DispatcherType) request.getAttribute(Globals.DISPATCHER_TYPE_ATTR);
 
         String requestPath = null;
         Object attribute = request.getAttribute(Globals.DISPATCHER_REQUEST_PATH_ATTR);
         if (attribute != null){
             requestPath = attribute.toString();
         }
-
         String servletName = wrapper.getName();
 
-        // Add the relevant path-mapped filters to this filter chain
+        // 将相关的路径映射过滤器添加到此过滤器链
         for (FilterMap filterMap : filterMaps) {
+            // 匹配过滤规则
             if (!matchDispatcher(filterMap, dispatcher)) {
                 continue;
             }
+            // 匹配请求路径
             if (!matchFiltersURL(filterMap, requestPath))
                 continue;
             ApplicationFilterConfig filterConfig = (ApplicationFilterConfig)
                     context.findFilterConfig(filterMap.getFilterName());
             if (filterConfig == null) {
-                // FIXME - log configuration problem
                 continue;
             }
             filterChain.addFilter(filterConfig);
         }
 
-        // Add filters that match on servlet name second
+        // 添加与servlet名称第二匹配的过滤器
         for (FilterMap filterMap : filterMaps) {
             if (!matchDispatcher(filterMap, dispatcher)) {
                 continue;
             }
+            // 匹配Servlet名
             if (!matchFiltersServlet(filterMap, servletName))
                 continue;
             ApplicationFilterConfig filterConfig = (ApplicationFilterConfig)
                     context.findFilterConfig(filterMap.getFilterName());
             if (filterConfig == null) {
-                // FIXME - log configuration problem
                 continue;
             }
             filterChain.addFilter(filterConfig);

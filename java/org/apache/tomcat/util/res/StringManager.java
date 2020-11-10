@@ -16,6 +16,7 @@
  */
 package org.apache.tomcat.util.res;
 
+import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
 import java.util.Enumeration;
 import java.util.Hashtable;
@@ -165,6 +166,12 @@ public class StringManager {
         String value = getString(key);
         if (value == null) {
             value = key;
+        }
+        // TODO：解决源码启动的乱码问题
+        try {
+            value = new String(value.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
+        }catch(Exception e){
+            e.printStackTrace();
         }
 
         MessageFormat mf = new MessageFormat(value);

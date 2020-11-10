@@ -305,7 +305,7 @@ public interface Container extends Lifecycle {
      * @return the configuration path
      */
     public static String getConfigPath(Container container, String resourceName) {
-        StringBuilder result = new StringBuilder();
+        StringBuffer result = new StringBuffer();
         Container host = null;
         Container engine = null;
         while (container != null) {

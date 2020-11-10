@@ -17,7 +17,6 @@
 package org.apache.tomcat.websocket;
 
 import java.io.IOException;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
@@ -78,12 +77,6 @@ public class AsyncChannelWrapperNonSecure implements AsyncChannelWrapper {
     @Override
     public Future<Void> handshake() {
         return NOOP_FUTURE;
-    }
-
-
-    @Override
-    public SocketAddress getLocalAddress() throws IOException {
-        return socketChannel.getLocalAddress();
     }
 
 

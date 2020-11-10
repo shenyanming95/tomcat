@@ -39,15 +39,12 @@ class StreamStateMachine {
     private static final Log log = LogFactory.getLog(StreamStateMachine.class);
     private static final StringManager sm = StringManager.getManager(StreamStateMachine.class);
 
-    private final String connectionId;
-    private final String streamId;
-
+    private final Stream stream;
     private State state;
 
 
-    StreamStateMachine(String connectionId, String streamId) {
-        this.connectionId = connectionId;
-        this.streamId = streamId;
+    StreamStateMachine(Stream stream) {
+        this.stream = stream;
         stateChange(null, State.IDLE);
     }
 
@@ -95,7 +92,7 @@ class StreamStateMachine {
     public synchronized void sendReset() {
         if (state == State.IDLE) {
             throw new IllegalStateException(sm.getString("streamStateMachine.debug.change",
-                    connectionId, streamId, state));
+                    stream.getConnectionId(), stream.getIdentifier(), state));
         }
         if (state.canReset()) {
             stateChange(state, State.CLOSED_RST_TX);
@@ -112,8 +109,8 @@ class StreamStateMachine {
         if (state == oldState) {
             state = newState;
             if (log.isDebugEnabled()) {
-                log.debug(sm.getString("streamStateMachine.debug.change", connectionId,
-                        streamId, oldState, newState));
+                log.debug(sm.getString("streamStateMachine.debug.change", stream.getConnectionId(),
+                        stream.getIdentifier(), oldState, newState));
             }
         }
     }
@@ -125,12 +122,12 @@ class StreamStateMachine {
         if (!isFrameTypePermitted(frameType)) {
             if (state.connectionErrorForInvalidFrame) {
                 throw new ConnectionException(sm.getString("streamStateMachine.invalidFrame",
-                        connectionId, streamId, state, frameType),
+                        stream.getConnectionId(), stream.getIdentifier(), state, frameType),
                         state.errorCodeForInvalidFrame);
             } else {
                 throw new StreamException(sm.getString("streamStateMachine.invalidFrame",
-                        connectionId, streamId, state, frameType),
-                        state.errorCodeForInvalidFrame, Integer.parseInt(streamId));
+                        stream.getConnectionId(), stream.getIdentifier(), state, frameType),
+                        state.errorCodeForInvalidFrame, stream.getIdAsInt());
             }
         }
     }

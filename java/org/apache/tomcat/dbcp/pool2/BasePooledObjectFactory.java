@@ -17,7 +17,7 @@
 package org.apache.tomcat.dbcp.pool2;
 
 /**
- * A base implementation of {@code PoolableObjectFactory}.
+ * A base implementation of <code>PoolableObjectFactory</code>.
  * <p>
  * All operations defined here are essentially no-op's.
  * <p>

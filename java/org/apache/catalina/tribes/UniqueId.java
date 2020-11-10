@@ -70,7 +70,9 @@ public final class UniqueId implements Serializable{
 
     @Override
     public String toString() {
-        return "UniqueId" + Arrays.toString(id);
+        StringBuilder buf = new StringBuilder("UniqueId");
+        buf.append(Arrays.toString(id));
+        return buf.toString();
     }
 
 }

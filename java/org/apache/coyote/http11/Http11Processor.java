@@ -30,7 +30,6 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.coyote.AbstractProcessor;
 import org.apache.coyote.ActionCode;
 import org.apache.coyote.Adapter;
-import org.apache.coyote.ContinueResponseTiming;
 import org.apache.coyote.ErrorState;
 import org.apache.coyote.Request;
 import org.apache.coyote.RequestInfo;
@@ -137,8 +136,7 @@ public class Http11Processor extends AbstractProcessor {
 
 
     /**
-     * Instance of the new protocol to use after the HTTP connection has been
-     * upgraded.
+     * HTTP连接升级后要使用的新协议的实例
      */
     private UpgradeToken upgradeToken = null;
 
@@ -238,12 +236,11 @@ public class Http11Processor extends AbstractProcessor {
 
 
     @Override
-    public SocketState service(SocketWrapperBase<?> socketWrapper)
-        throws IOException {
+    public SocketState service(SocketWrapperBase<?> socketWrapper) throws IOException {
         RequestInfo rp = request.getRequestProcessor();
         rp.setStage(org.apache.coyote.Constants.STAGE_PARSE);
 
-        // Setting up the I/O
+        // 分配ByteBuffer
         setSocketWrapper(socketWrapper);
 
         // Flags
@@ -255,18 +252,15 @@ public class Http11Processor extends AbstractProcessor {
 
         while (!getErrorState().isError() && keepAlive && !isAsync() && upgradeToken == null &&
                 sendfileState == SendfileState.DONE && !protocol.isPaused()) {
-
-            // Parsing the request header
             try {
-                if (!inputBuffer.parseRequestLine(keptAlive, protocol.getConnectionTimeout(),
-                        protocol.getKeepAliveTimeout())) {
+                // 解析请求头, 如果解析成功返回true.
+                if (!inputBuffer.parseRequestLine(keptAlive, protocol.getConnectionTimeout(), protocol.getKeepAliveTimeout())) {
                     if (inputBuffer.getParsingRequestLinePhase() == -1) {
                         return SocketState.UPGRADING;
                     } else if (handleIncompleteRequestLineRead()) {
                         break;
                     }
                 }
-
                 // Process the Protocol component of the request line
                 // Need to know if this is an HTTP 0.9 request before trying to
                 // parse headers.
@@ -336,7 +330,7 @@ public class Http11Processor extends AbstractProcessor {
                         InternalHttpUpgradeHandler upgradeHandler =
                                 upgradeProtocol.getInternalUpgradeHandler(
                                         socketWrapper, getAdapter(), cloneRequest(request));
-                        UpgradeToken upgradeToken = new UpgradeToken(upgradeHandler, null, null, requestedProtocol);
+                        UpgradeToken upgradeToken = new UpgradeToken(upgradeHandler, null, null);
                         action(ActionCode.UPGRADE, upgradeToken);
                         return SocketState.UPGRADING;
                     }
@@ -371,14 +365,14 @@ public class Http11Processor extends AbstractProcessor {
             if (getErrorState().isIoAllowed()) {
                 try {
                     rp.setStage(org.apache.coyote.Constants.STAGE_SERVICE);
+                    // 将请求交给 org.apache.coyote.Adapter, 经它转换后, 交给Servlet容器
                     getAdapter().service(request, response);
                     // Handle when the response was committed before a serious
                     // error occurred.  Throwing a ServletException should both
                     // set the status to 500 and set the errorException.
                     // If we fail here, then the response is likely already
                     // committed, so we can't try and set headers.
-                    if(keepAlive && !getErrorState().isError() && !isAsync() &&
-                            statusDropsConnection(response.getStatus())) {
+                    if(keepAlive && !getErrorState().isError() && !isAsync() && statusDropsConnection(response.getStatus())) {
                         setErrorState(ErrorState.CLOSE_CLEAN, null);
                     }
                 } catch (InterruptedIOException e) {
@@ -405,8 +399,9 @@ public class Http11Processor extends AbstractProcessor {
                 }
             }
 
-            // Finish the handling of the request
+
             rp.setStage(org.apache.coyote.Constants.STAGE_ENDINPUT);
+
             if (!isAsync()) {
                 // If this is an async request then the request ends when it has
                 // been completed. The AsyncContext is responsible for calling
@@ -537,7 +532,7 @@ public class Http11Processor extends AbstractProcessor {
             // Ignore, an error here is already processed in prepareRequest
             // but is done again since the content length is still -1
         }
-        if (contentLength > 0 && protocol.getMaxSwallowSize() > -1 &&
+        if (contentLength > 0 &&
                 (contentLength - request.getBytesRead() > protocol.getMaxSwallowSize())) {
             // There is more data to swallow than Tomcat will accept so the
             // connection is going to be closed. Disable keep-alive which will
@@ -924,13 +919,9 @@ public class Http11Processor extends AbstractProcessor {
 
         // FIXME: Add transfer encoding header
 
-        if ((entityBody) && (!contentDelimitation) || connectionClosePresent) {
-            // Disable keep-alive if:
-            // - there is a response body but way for the client to determine
-            //   the content length information; or
-            // - there is a "connection: close" header present
-            // This will cause the "connection: close" header to be added if it
-            // is not already present.
+        if ((entityBody) && (!contentDelimitation)) {
+            // Mark as close the connection after the request, and add the
+            // connection: close header
             keepAlive = false;
         }
 
@@ -1165,26 +1156,15 @@ public class Http11Processor extends AbstractProcessor {
 
     @Override
     protected final void ack() {
-        ack(ContinueResponseTiming.ALWAYS);
-    }
-
-
-    @Override
-    protected final void ack(ContinueResponseTiming continueResponseTiming) {
-        // Only try and send the ACK for ALWAYS or if the timing of the request
-        // to send the ACK matches the current configuration.
-        if (continueResponseTiming == ContinueResponseTiming.ALWAYS ||
-                continueResponseTiming == protocol.getContinueResponseTimingInternal()) {
-            // Acknowledge request
-            // Send a 100 status back if it makes sense (response not committed
-            // yet, and client specified an expectation for 100-continue)
-            if (!response.isCommitted() && request.hasExpectation()) {
-                inputBuffer.setSwallowInput(true);
-                try {
-                    outputBuffer.sendAck();
-                } catch (IOException e) {
-                    setErrorState(ErrorState.CLOSE_CONNECTION_NOW, e);
-                }
+        // Acknowledge request
+        // Send a 100 status back if it makes sense (response not committed
+        // yet, and client specified an expectation for 100-continue)
+        if (!response.isCommitted() && request.hasExpectation()) {
+            inputBuffer.setSwallowInput(true);
+            try {
+                outputBuffer.sendAck();
+            } catch (IOException e) {
+                setErrorState(ErrorState.CLOSE_CONNECTION_NOW, e);
             }
         }
     }

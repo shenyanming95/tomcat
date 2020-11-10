@@ -452,13 +452,11 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
         container.fireContainerEvent(Container.REMOVE_VALVE_EVENT, valve);
     }
 
-
     @Override
     public Valve getFirst() {
         if (first != null) {
             return first;
         }
-
         return basic;
     }
 }

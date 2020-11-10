@@ -125,10 +125,10 @@ public class Substitution {
     }
 
     public void parse(Map<String, RewriteMap> maps) {
-        this.elements = parseSubstitution(sub, maps);
+        this.elements = parseSubtitution(sub, maps);
     }
 
-    private SubstitutionElement[] parseSubstitution(String sub, Map<String, RewriteMap> maps) {
+    private SubstitutionElement[] parseSubtitution(String sub, Map<String, RewriteMap> maps) {
 
         List<SubstitutionElement> elements = new ArrayList<>();
         int pos = 0;
@@ -197,9 +197,9 @@ public class Substitution {
                     } else {
                         key = sub.substring(colon + 1, close);
                     }
-                    newElement.key = parseSubstitution(key, maps);
+                    newElement.key = parseSubtitution(key, maps);
                     if (defaultValue != null) {
-                        newElement.defaultValue = parseSubstitution(defaultValue, maps);
+                        newElement.defaultValue = parseSubtitution(defaultValue, maps);
                     }
                     pos = close + 1;
                     elements.add(newElement);
@@ -314,7 +314,7 @@ public class Substitution {
     }
 
     private String evaluateSubstitution(SubstitutionElement[] elements, Matcher rule, Matcher cond, Resolver resolver) {
-        StringBuilder buf = new StringBuilder();
+        StringBuffer buf = new StringBuffer();
         for (SubstitutionElement element : elements) {
             buf.append(element.evaluate(rule, cond, resolver));
         }

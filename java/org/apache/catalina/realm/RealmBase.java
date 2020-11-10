@@ -1041,17 +1041,17 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
         file.append(protocol).append("://").append(host);
         // Host with port
         if(redirectPort != 443) {
-            file.append(':').append(redirectPort);
+            file.append(":").append(redirectPort);
         }
         // URI
         file.append(request.getRequestURI());
         String requestedSessionId = request.getRequestedSessionId();
         if ((requestedSessionId != null) &&
             request.isRequestedSessionIdFromURL()) {
-            file.append(';');
+            file.append(";");
             file.append(SessionConfig.getSessionUriParamName(
                     request.getContext()));
-            file.append('=');
+            file.append("=");
             file.append(requestedSessionId);
         }
         String queryString = request.getQueryString();
@@ -1544,7 +1544,7 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
 
     private static X509UsernameRetriever createUsernameRetriever(String className)
         throws LifecycleException {
-        if(null == className || className.trim().isEmpty())
+        if(null == className || "".equals(className.trim()))
             return new X509SubjectDnRetriever();
 
         try {

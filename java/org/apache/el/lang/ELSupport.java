@@ -540,20 +540,19 @@ public class ELSupport {
         if (obj == null)
             return null;
         if (obj instanceof String) {
-            String str = (String) obj;
             PropertyEditor editor = PropertyEditorManager.findEditor(type);
             if (editor == null) {
-                if (str.isEmpty()) {
+                if ("".equals(obj)) {
                     return null;
                 }
                 throw new ELException(MessageFactory.get("error.convert", obj,
                         obj.getClass(), type));
             } else {
                 try {
-                    editor.setAsText(str);
+                    editor.setAsText((String) obj);
                     return editor.getValue();
                 } catch (RuntimeException e) {
-                    if (str.isEmpty()) {
+                    if ("".equals(obj)) {
                         return null;
                     }
                     throw new ELException(MessageFactory.get("error.convert",

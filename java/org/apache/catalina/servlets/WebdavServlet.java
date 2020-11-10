@@ -1993,7 +1993,7 @@ public class WebdavServlet extends DefaultServlet {
         generatePropFindResponse(generatedXML, rewrittenUrl, path, type, propertiesVector,
                 resource.isFile(), false, resource.getCreation(), resource.getLastModified(),
                 resource.getContentLength(), getServletContext().getMimeType(resource.getName()),
-                generateETag(resource));
+                resource.getETag());
     }
 
 
@@ -2499,7 +2499,7 @@ public class WebdavServlet extends DefaultServlet {
 
         @Override
         public InputSource resolveEntity (String publicId, String systemId) {
-            context.log(sm.getString("webdavservlet.externalEntityIgnored",
+            context.log(sm.getString("webdavservlet.enternalEntityIgnored",
                     publicId, systemId));
             return new InputSource(
                     new StringReader("Ignored external entity"));

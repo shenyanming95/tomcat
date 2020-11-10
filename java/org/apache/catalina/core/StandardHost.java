@@ -42,7 +42,6 @@ import org.apache.catalina.LifecycleListener;
 import org.apache.catalina.Valve;
 import org.apache.catalina.loader.WebappClassLoaderBase;
 import org.apache.catalina.util.ContextName;
-import org.apache.catalina.valves.ErrorReportValve;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.ExceptionUtils;
@@ -814,12 +813,12 @@ public class StandardHost extends ContainerBase implements Host {
      */
     @Override
     protected synchronized void startInternal() throws LifecycleException {
-
-        // Set error report valve
+        // 设置一个用于记录错误报告的Valve, 默认为：org.apache.catalina.valves.ErrorReportValve
         String errorValve = getErrorReportValveClass();
         if ((errorValve != null) && (!errorValve.equals(""))) {
             try {
                 boolean found = false;
+                // 首先判断Host组件是否已经加载了这个Valve
                 Valve[] valves = getPipeline().getValves();
                 for (Valve valve : valves) {
                     if (errorValve.equals(valve.getClass().getName())) {
@@ -828,18 +827,17 @@ public class StandardHost extends ContainerBase implements Host {
                     }
                 }
                 if(!found) {
-                    Valve valve = ErrorReportValve.class.getName().equals(errorValve) ?
-                        new ErrorReportValve() :
-                        (Valve) Class.forName(errorValve).getConstructor().newInstance();
+                    // 如果还没有加载, 则创建它, 然后加载到Host的Pipeline中
+                    Valve valve = (Valve) Class.forName(errorValve).getConstructor().newInstance();
                     getPipeline().addValve(valve);
                 }
             } catch (Throwable t) {
                 ExceptionUtils.handleThrowable(t);
-                log.error(sm.getString(
-                        "standardHost.invalidErrorReportValveClass",
-                        errorValve), t);
+                log.error(sm.getString("standardHost.invalidErrorReportValveClass", errorValve), t);
             }
         }
+        // 调用父类org.apache.catalina.core.ContainerBase的启动逻辑, 会去启动Host的子容器,
+        // 也就是 Context
         super.startInternal();
     }
 

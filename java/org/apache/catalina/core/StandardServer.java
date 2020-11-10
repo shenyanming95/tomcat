@@ -414,7 +414,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
 
 
     /**
-     * Handles the special values.
+     * Server的线程数, 至少为2
      */
     private static int getUtilityThreadsInternal(int utilityThreads) {
         int result = utilityThreads;
@@ -432,28 +432,40 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
     public void setUtilityThreads(int utilityThreads) {
         // Use local copies to ensure thread safety
         int oldUtilityThreads = this.utilityThreads;
+        // 如果新设置的线程池线程数量 < 旧的线程池数量, 就没必要修改了
         if (getUtilityThreadsInternal(utilityThreads) < getUtilityThreadsInternal(oldUtilityThreads)) {
             return;
         }
+        // 代码走到这, 说明 utilityThreads 的值大于等于旧值 this.utilityThreads, 然后对其覆盖
         this.utilityThreads = utilityThreads;
         if (oldUtilityThreads != utilityThreads && utilityExecutor != null) {
+            // 线程数不相等, 并且定时线程池不为null, 重新配置定时线程池
             reconfigureUtilityExecutor(getUtilityThreadsInternal(utilityThreads));
         }
     }
 
 
+    /**
+     * 配置 Server 的定时线程池
+     * @param threads 核心线程数
+     */
     private synchronized void reconfigureUtilityExecutor(int threads) {
         // The ScheduledThreadPoolExecutor doesn't use MaximumPoolSize, only CorePoolSize is available
         if (utilityExecutor != null) {
+            // 如果定时线程池已经创建过, 就重置核心线程数即可
             utilityExecutor.setCorePoolSize(threads);
         } else {
+            // 如果未创建, 开始初始化.
+            // 此类线程非守护现场, 而且线程名称前缀为：Catalina-utility-0、Catalina-utility-1、Catalina-utility-2...
             ScheduledThreadPoolExecutor scheduledThreadPoolExecutor =
                     new ScheduledThreadPoolExecutor(threads,
                             new TaskThreadFactory("Catalina-utility-", utilityThreadsAsDaemon, Thread.MIN_PRIORITY));
+            // 设置其它属性并赋值
             scheduledThreadPoolExecutor.setKeepAliveTime(10, TimeUnit.SECONDS);
             scheduledThreadPoolExecutor.setRemoveOnCancelPolicy(true);
             scheduledThreadPoolExecutor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
             utilityExecutor = scheduledThreadPoolExecutor;
+            // 对原生的定时线程池重新包装, 防止JDK线程池的一些API操作, 如果停止和重配置...
             utilityExecutorWrapper = new org.apache.tomcat.util.threads.ScheduledThreadPoolExecutor(utilityExecutor);
         }
     }
@@ -578,7 +590,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
             return;
         }
 
-        // Set up a server socket to wait on
+        // 这边会启动一个Socket端口监听, 可以向这个Socket发送STOP请求, 停止tomcat服务
         try {
             awaitSocket = new ServerSocket(getPortWithOffset(), 1,
                     InetAddress.getByName(address));
@@ -828,7 +840,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
     public String toString() {
         StringBuilder sb = new StringBuilder("StandardServer[");
         sb.append(getPort());
-        sb.append(']');
+        sb.append("]");
         return sb.toString();
     }
 
@@ -918,19 +930,17 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
      */
     @Override
     protected void startInternal() throws LifecycleException {
-
+        // 触发"configure_start"事件, 同时设置状态为启动中
         fireLifecycleEvent(CONFIGURE_START_EVENT, null);
         setState(LifecycleState.STARTING);
-
+        // JNDI相关的
         globalNamingResources.start();
-
-        // Start our defined Services
+        // 启动各个Service
         synchronized (servicesLock) {
             for (Service service : services) {
                 service.start();
             }
         }
-
         if (periodicEventDelay > 0) {
             monitorFuture = getUtilityExecutor().scheduleWithFixedDelay(
                     new Runnable() {
@@ -1003,29 +1013,30 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
      */
     @Override
     protected void initInternal() throws LifecycleException {
-
+        // 调用父类 org.apache.catalina.util.LifecycleMBeanBase, 用于JMX监控
         super.initInternal();
 
-        // Initialize utility executor
+        // 创建Server的定时任务线程池
         reconfigureUtilityExecutor(getUtilityThreadsInternal(utilityThreads));
-        register(utilityExecutor, "type=UtilityExecutor");
 
+        /*
+         * JMX相关
+         */
+        register(utilityExecutor, "type=UtilityExecutor");
         // Register global String cache
         // Note although the cache is global, if there are multiple Servers
         // present in the JVM (may happen when embedding) then the same cache
         // will be registered under multiple names
         onameStringCache = register(new StringCache(), "type=StringCache");
-
         // Register the MBeanFactory
         MBeanFactory factory = new MBeanFactory();
         factory.setContainer(this);
         onameMBeanFactory = register(factory, "type=MBeanFactory");
-
         // Register the naming resources
         globalNamingResources.init();
 
-        // Populate the extension validator with JARs from common and shared
-        // class loaders
+
+        // Populate the extension validator with JARs from common and shared class loaders
         if (getCatalina() != null) {
             ClassLoader cl = getCatalina().getParentClassLoader();
             // Walk the class loader hierarchy. Stop at the system class loader.
@@ -1052,7 +1063,8 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
                 cl = cl.getParent();
             }
         }
-        // Initialize our defined Services
+        // 一个 Server 可以有多个 Service, 初始化 Server 的同时会初始化 Service,
+        // 这是Tomcat生命的优秀设计之一, 父容器调用生命周期接口的方法, 会连带着子容器相同的生命周期接口方法.
         for (Service service : services) {
             service.init();
         }

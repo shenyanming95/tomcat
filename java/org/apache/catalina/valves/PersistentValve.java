@@ -17,8 +17,6 @@
 package org.apache.catalina.valves;
 
 import java.io.IOException;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletResponse;
@@ -55,7 +53,6 @@ public class PersistentValve extends ValveBase {
 
     private volatile boolean clBindRequired;
 
-    protected Pattern filter = null;
 
     //------------------------------------------------------ Constructor
 
@@ -91,12 +88,6 @@ public class PersistentValve extends ValveBase {
     @Override
     public void invoke(Request request, Response response)
         throws IOException, ServletException {
-
-        // request without session
-        if (isRequestWithoutSession(request.getDecodedRequestURI())) {
-            getNext().invoke(request, response);
-            return;
-        }
 
         // Select the Context to be used for this Request
         Context context = request.getContext();
@@ -170,26 +161,22 @@ public class PersistentValve extends ValveBase {
                     if (manager instanceof StoreManager) {
                         Session session = manager.findSession(newsessionId);
                         Store store = ((StoreManager) manager).getStore();
-                        boolean stored = false;
-                        if (session != null) {
-                            synchronized (session) {
-                                if (store != null && session.isValid() &&
-                                        !isSessionStale(session, System.currentTimeMillis())) {
-                                    store.save(session);
-                                    ((StoreManager) manager).removeSuper(session);
-                                    session.recycle();
-                                    stored = true;
-                                }
-
-                            }
-                        }
-                        if (!stored) {
+                        if (store != null && session != null && session.isValid() &&
+                                !isSessionStale(session, System.currentTimeMillis())) {
+                            store.save(session);
+                            ((StoreManager) manager).removeSuper(session);
+                            session.recycle();
+                        } else {
                             if (container.getLogger().isDebugEnabled()) {
-                                container.getLogger()
-                                        .debug("newsessionId store: " + store + " session: " + session + " valid: "
-                                                + (session == null ? "N/A" : Boolean.toString(session.isValid()))
-                                                + " stale: " + isSessionStale(session, System.currentTimeMillis()));
+                                container.getLogger().debug("newsessionId store: " +
+                                        store + " session: " + session +
+                                        " valid: " +
+                                        (session == null ? "N/A" : Boolean.toString(
+                                                session.isValid())) +
+                                        " stale: " + isSessionStale(session,
+                                                System.currentTimeMillis()));
                             }
+
                         }
                     } else {
                         if (container.getLogger().isDebugEnabled()) {
@@ -219,7 +206,8 @@ public class PersistentValve extends ValveBase {
         if (session != null) {
             int maxInactiveInterval = session.getMaxInactiveInterval();
             if (maxInactiveInterval >= 0) {
-                int timeIdle = (int) (session.getIdleTimeInternal() / 1000L);
+                int timeIdle = // Truncate, do not round up
+                    (int) ((timeNow - session.getThisAccessedTime()) / 1000L);
                 if (timeIdle >= maxInactiveInterval) {
                     return true;
                 }
@@ -240,30 +228,6 @@ public class PersistentValve extends ValveBase {
     private void unbind(Context context) {
         if (clBindRequired) {
             context.unbind(Globals.IS_SECURITY_ENABLED, MY_CLASSLOADER);
-        }
-    }
-
-    protected boolean isRequestWithoutSession(String uri) {
-        Pattern f = filter;
-        return f != null && f.matcher(uri).matches();
-    }
-
-    public String getFilter() {
-        if (filter == null) {
-            return null;
-        }
-        return filter.toString();
-    }
-
-    public void setFilter(String filter) {
-        if (filter == null || filter.length() == 0) {
-            this.filter = null;
-        } else {
-            try {
-                this.filter = Pattern.compile(filter);
-            } catch (PatternSyntaxException pse) {
-                container.getLogger().error(sm.getString("persistentValve.filter.failure", filter), pse);
-            }
         }
     }
 }

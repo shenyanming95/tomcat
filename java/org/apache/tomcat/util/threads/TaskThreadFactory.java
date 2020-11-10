@@ -24,8 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.tomcat.util.security.PrivilegedSetTccl;
 
 /**
- * Simple task thread factory to use to create threads for an executor
- * implementation.
+ * 简单的线程工厂, 可以指定线程名称、是否守护线程、优先级
  */
 public class TaskThreadFactory implements ThreadFactory {
 

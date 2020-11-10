@@ -29,7 +29,7 @@ import org.apache.catalina.Globals;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleState;
 import org.apache.catalina.Service;
-import org.apache.catalina.core.AprStatus;
+import org.apache.catalina.core.AprLifecycleListener;
 import org.apache.catalina.util.LifecycleMBeanBase;
 import org.apache.coyote.AbstractProtocol;
 import org.apache.coyote.Adapter;
@@ -58,7 +58,6 @@ public class Connector extends LifecycleMBeanBase  {
 
     private static final Log log = LogFactory.getLog(Connector.class);
 
-
     /**
      * Alternate flag to enable recycling of facades.
      */
@@ -80,8 +79,8 @@ public class Connector extends LifecycleMBeanBase  {
 
 
     public Connector(String protocol) {
-        boolean apr = AprStatus.isAprAvailable() &&
-            AprStatus.getUseAprConnector();
+        boolean apr = AprLifecycleListener.isAprAvailable() &&
+                AprLifecycleListener.getUseAprConnector();
         ProtocolHandler p = null;
         try {
             p = ProtocolHandler.create(protocol, apr);
@@ -625,7 +624,7 @@ public class Connector extends LifecycleMBeanBase  {
      * @return the Coyote protocol handler in use.
      */
     public String getProtocol() {
-        boolean apr = AprStatus.getUseAprConnector();
+        boolean apr = AprLifecycleListener.getUseAprConnector();
         if ((!apr && org.apache.coyote.http11.Http11NioProtocol.class.getName().equals(protocolHandlerClassName))
                 || (apr && org.apache.coyote.http11.Http11AprProtocol.class.getName().equals(protocolHandlerClassName))) {
             return "HTTP/1.1";
@@ -996,18 +995,21 @@ public class Connector extends LifecycleMBeanBase  {
 
     @Override
     protected void initInternal() throws LifecycleException {
-
+        // 父类是LifecycleMBeanBase, 作用是注册JMX
         super.initInternal();
 
         if (protocolHandler == null) {
-            throw new LifecycleException(
-                    sm.getString("coyoteConnector.protocolHandlerInstantiationFailed"));
+            throw new LifecycleException(sm.getString("coyoteConnector.protocolHandlerInstantiationFailed"));
         }
 
-        // Initialize adapter
+        // 初始化 org.apache.coyote.Adapter,
+        // Adapter 由 org.apache.coyote.Processor 调用, 然后 Adapter 会将请求转发给 Servlet容器
         adapter = new CoyoteAdapter(this);
+        // ProtocolHandler包含 Endpoint 和 Processor, 它还会持有 Adapter的引用
         protocolHandler.setAdapter(adapter);
         if (service != null) {
+            // 将 Server 上的定时任务线程池 java.util.concurrent.ScheduledExecutorService
+            // 设值到 protocolHandler底层的 Endpoint 中
             protocolHandler.setUtilityExecutor(service.getServer().getUtilityExecutor());
         }
 
@@ -1016,15 +1018,17 @@ public class Connector extends LifecycleMBeanBase  {
             setParseBodyMethods(getParseBodyMethods());
         }
 
-        if (protocolHandler.isAprRequired() && !AprStatus.isInstanceCreated()) {
+        /* Apr I/O模型的配置 */
+
+        if (protocolHandler.isAprRequired() && !AprLifecycleListener.isInstanceCreated()) {
             throw new LifecycleException(sm.getString("coyoteConnector.protocolHandlerNoAprListener",
                     getProtocolHandlerClassName()));
         }
-        if (protocolHandler.isAprRequired() && !AprStatus.isAprAvailable()) {
+        if (protocolHandler.isAprRequired() && !AprLifecycleListener.isAprAvailable()) {
             throw new LifecycleException(sm.getString("coyoteConnector.protocolHandlerNoAprLibrary",
                     getProtocolHandlerClassName()));
         }
-        if (AprStatus.isAprAvailable() && AprStatus.getUseOpenSSL() &&
+        if (AprLifecycleListener.isAprAvailable() && AprLifecycleListener.getUseOpenSSL() &&
                 protocolHandler instanceof AbstractHttp11JsseProtocol) {
             AbstractHttp11JsseProtocol<?> jsseProtocolHandler =
                     (AbstractHttp11JsseProtocol<?>) protocolHandler;
@@ -1061,6 +1065,7 @@ public class Connector extends LifecycleMBeanBase  {
         setState(LifecycleState.STARTING);
 
         try {
+            // 连接器的启动就是启动 protocolHandler
             protocolHandler.start();
         } catch (Exception e) {
             throw new LifecycleException(

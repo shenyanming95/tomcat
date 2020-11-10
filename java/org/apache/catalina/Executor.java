@@ -18,6 +18,11 @@ package org.apache.catalina;
 
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Tomcat扩展了JDK自带的{@link java.util.concurrent.Executor}, 并加入它定义的生命周期组件接口.
+ * 在JDK执行器原有基础上, 额外添加了一个带有延迟效果的方法.
+ *
+ */
 public interface Executor extends java.util.concurrent.Executor, Lifecycle {
 
     public String getName();

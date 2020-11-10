@@ -204,7 +204,7 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
         }
         if (running) {
             running = false;
-            acceptor.stop();
+            acceptor.state = AcceptorState.ENDED;
             // Use the executor to avoid binding the main thread if something bad
             // occurs and unbind will also wait for a bit for it to complete
             getExecutor().execute(new Runnable() {
@@ -420,11 +420,6 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
         }
 
         @Override
-        public void stop() {
-            acceptor.state = AcceptorState.ENDED;
-        }
-
-        @Override
         public void completed(AsynchronousSocketChannel socket,
                 Void attachment) {
             // Successful accept, reset the error delay
@@ -433,14 +428,6 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
             // Configure the socket
             if (isRunning() && !isPaused()) {
                 if (getMaxConnections() == -1) {
-                    serverSock.accept(null, this);
-                } else if (getConnectionCount() < getMaxConnections()) {
-                    try {
-                        // This will not block
-                        countUpOrAwaitConnection();
-                    } catch (InterruptedException e) {
-                        // Ignore
-                    }
                     serverSock.accept(null, this);
                 } else {
                     // Accept again on a new thread since countUpOrAwaitConnection may block

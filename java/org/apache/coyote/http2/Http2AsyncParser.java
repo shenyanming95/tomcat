@@ -35,7 +35,7 @@ class Http2AsyncParser extends Http2Parser {
 
     private final SocketWrapperBase<?> socketWrapper;
     private final Http2AsyncUpgradeHandler upgradeHandler;
-    private volatile Throwable error = null;
+    private Throwable error = null;
 
     Http2AsyncParser(String connectionId, Input input, Output output, SocketWrapperBase<?> socketWrapper, Http2AsyncUpgradeHandler upgradeHandler) {
         super(connectionId, input, output);
@@ -50,10 +50,10 @@ class Http2AsyncParser extends Http2Parser {
         byte[] prefaceData = new byte[CLIENT_PREFACE_START.length];
         ByteBuffer preface = ByteBuffer.wrap(prefaceData);
         ByteBuffer header = ByteBuffer.allocate(9);
-        ByteBuffer framePayload = ByteBuffer.allocate(input.getMaxFrameSize());
-        PrefaceCompletionHandler handler = new PrefaceCompletionHandler(webConnection, stream, prefaceData, preface, header, framePayload);
+        ByteBuffer framePaylod = ByteBuffer.allocate(input.getMaxFrameSize());
+        PrefaceCompletionHandler handler = new PrefaceCompletionHandler(webConnection, stream, prefaceData, preface, header, framePaylod);
         socketWrapper.read(BlockingMode.NON_BLOCK, socketWrapper.getReadTimeout(), TimeUnit.MILLISECONDS, null,
-                handler, handler, preface, header, framePayload);
+                handler, handler, preface, header, framePaylod);
     }
 
 
@@ -117,14 +117,13 @@ class Http2AsyncParser extends Http2Parser {
                 if (payload.hasRemaining()) {
                     socketWrapper.unRead(payload);
                 }
-                // Finish processing the connection
-                upgradeHandler.processConnectionCallback(webConnection, stream);
-            } else {
-                upgradeHandler.closeConnection(new ConnectionException(error.getMessage(), Http2Error.PROTOCOL_ERROR, error));
             }
+            // Finish processing the connection
+            upgradeHandler.processConnectionCallback(webConnection, stream);
             // Continue reading frames
             upgradeHandler.upgradeDispatch(SocketEvent.OPEN_READ);
         }
+
     }
 
     @Override

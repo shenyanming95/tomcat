@@ -43,8 +43,7 @@ public class NioBlockingSelector {
     private static final Log log = LogFactory.getLog(NioBlockingSelector.class);
     protected static final StringManager sm = StringManager.getManager(NioBlockingSelector.class);
 
-    private final SynchronizedStack<KeyReference> keyReferenceStack =
-            new SynchronizedStack<>();
+    private final SynchronizedStack<KeyReference> keyReferenceStack = new SynchronizedStack<>();
 
     protected Selector sharedSelector;
 

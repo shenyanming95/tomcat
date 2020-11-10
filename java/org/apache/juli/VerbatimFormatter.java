@@ -31,8 +31,13 @@ public class VerbatimFormatter extends Formatter {
 
     @Override
     public String format(LogRecord record) {
-        // Timestamp + New line for next record
-        return record.getMessage() + System.lineSeparator();
+        // Timestamp
+        StringBuilder sb = new StringBuilder(record.getMessage());
+
+        // New line for next record
+        sb.append(System.lineSeparator());
+
+        return sb.toString();
     }
 
 }

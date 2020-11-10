@@ -39,8 +39,6 @@ import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 
 import javax.servlet.MultipartConfigElement;
 import javax.servlet.ServletContainerInitializer;
@@ -68,6 +66,7 @@ import org.apache.catalina.core.StandardContext;
 import org.apache.catalina.core.StandardHost;
 import org.apache.catalina.util.ContextName;
 import org.apache.catalina.util.Introspection;
+import org.apache.jasper.servlet.JasperInitializer;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.Jar;
@@ -123,6 +122,7 @@ import org.xml.sax.SAXParseException;
 public class ContextConfig implements LifecycleListener {
 
     private static final Log log = LogFactory.getLog(ContextConfig.class);
+
 
     /**
      * The string resources for this package.
@@ -475,18 +475,8 @@ public class ContextConfig implements LifecycleListener {
     }
 
 
-    protected String getGeneratedCodePackage() {
-        Catalina catalina = Container.getService(context).getServer().getCatalina();
-        if (catalina != null) {
-            return catalina.getGeneratedCodePackage();
-        } else {
-            return "generatedCodePackage";
-        }
-    }
-
-
-    protected static String getContextXmlPackageName(String generatedCodePackage, Container container) {
-        StringBuilder result = new StringBuilder();
+    protected static String getContextXmlPackageName(Container container) {
+        StringBuffer result = new StringBuffer();
         Container host = null;
         Container engine = null;
         while (container != null) {
@@ -497,7 +487,7 @@ public class ContextConfig implements LifecycleListener {
             }
             container = container.getParent();
         }
-        result.append(generatedCodePackage);
+        result.append("catalina");
         if (engine != null) {
             result.append('.');
         }
@@ -527,26 +517,26 @@ public class ContextConfig implements LifecycleListener {
 
     protected void generateClassHeader(Digester digester, String packageName, String resourceName) {
         StringBuilder code = digester.getGeneratedCode();
-        code.append("package ").append(packageName).append(';').append(System.lineSeparator());
+        code.append("package ").append(packageName).append(";").append(System.lineSeparator());
         code.append("public class ").append(resourceName).append(" implements ");
         code.append(ContextXml.class.getName().replace('$', '.'));
         code.append(" {").append(System.lineSeparator());
         code.append("public void load(");
         code.append(Context.class.getName());
         String contextArgument = digester.toVariableName(context);
-        code.append(' ').append(contextArgument).append(") {").append(System.lineSeparator());
+        code.append(" ").append(contextArgument).append(") {").append(System.lineSeparator());
         // Create a new variable with the concrete type
         digester.setKnown(context);
-        code.append(context.getClass().getName()).append(' ').append(digester.toVariableName(context));
+        code.append(context.getClass().getName()).append(" ").append(digester.toVariableName(context));
         code.append(" = (").append(context.getClass().getName()).append(") ").append(contextArgument);
-        code.append(';').append(System.lineSeparator());
+        code.append(";").append(System.lineSeparator());
     }
 
 
     protected void generateClassFooter(Digester digester) {
         StringBuilder code = digester.getGeneratedCode();
-        code.append('}').append(System.lineSeparator());
-        code.append('}').append(System.lineSeparator());
+        code.append("}").append(System.lineSeparator());
+        code.append("}").append(System.lineSeparator());
     }
 
 
@@ -585,12 +575,16 @@ public class ContextConfig implements LifecycleListener {
         if (!context.getOverride()) {
 
             if (useGeneratedCode || generateCode) {
-                contextXmlPackageName = getGeneratedCodePackage();
+                contextXmlPackageName = "catalina";
                 contextXmlSimpleClassName = "ContextXmlDefault";
                 contextXmlClassName = contextXmlPackageName + "." + contextXmlSimpleClassName;
             }
             if (useGeneratedCode) {
-                contextXml = (ContextXml) Digester.loadGeneratedClass(contextXmlClassName);
+                try {
+                    contextXml = (ContextXml) Catalina.class.getClassLoader().loadClass(contextXmlClassName).newInstance();
+                } catch (Exception e) {
+                    // Ignore, no generated code found
+                }
             }
             if (contextXml != null) {
                 contextXml.load(context);
@@ -611,7 +605,6 @@ public class ContextConfig implements LifecycleListener {
                             writer.write(digester.getGeneratedCode().toString());
                         }
                         digester.endGeneratingCode();
-                        Digester.addGeneratedClass(contextXmlClassName);
                     }
                 } catch (MalformedURLException e) {
                     log.error(sm.getString("contextConfig.badUrl", defaultContextXml), e);
@@ -621,12 +614,16 @@ public class ContextConfig implements LifecycleListener {
             }
 
             if (useGeneratedCode || generateCode) {
-                contextXmlPackageName = getContextXmlPackageName(getGeneratedCodePackage(), context);
+                contextXmlPackageName = getContextXmlPackageName(context);
                 contextXmlSimpleClassName = "ContextXmlDefault";
                 contextXmlClassName = contextXmlPackageName + "." + contextXmlSimpleClassName;
             }
             if (useGeneratedCode) {
-                contextXml = (ContextXml) Digester.loadGeneratedClass(contextXmlClassName);
+                try {
+                    contextXml = (ContextXml) Catalina.class.getClassLoader().loadClass(contextXmlClassName).newInstance();
+                } catch (Exception e) {
+                    // Ignore, no generated code found
+                }
             }
             if (contextXml != null) {
                 contextXml.load(context);
@@ -648,7 +645,6 @@ public class ContextConfig implements LifecycleListener {
                             writer.write(digester.getGeneratedCode().toString());
                         }
                         digester.endGeneratingCode();
-                        Digester.addGeneratedClass(contextXmlClassName);
                     }
                 } catch (MalformedURLException e) {
                     log.error(sm.getString("contextConfig.badUrl", hostContextFile), e);
@@ -660,12 +656,16 @@ public class ContextConfig implements LifecycleListener {
 
         if (context.getConfigFile() != null) {
             if (useGeneratedCode || generateCode) {
-                contextXmlPackageName = getContextXmlPackageName(getGeneratedCodePackage(), context);
+                contextXmlPackageName = getContextXmlPackageName(context);
                 contextXmlSimpleClassName = "ContextXml_" + context.getName().replace('/', '_').replace("-", "__");
                 contextXmlClassName = contextXmlPackageName + "." + contextXmlSimpleClassName;
             }
             if (useGeneratedCode) {
-                contextXml = (ContextXml) Digester.loadGeneratedClass(contextXmlClassName);
+                try {
+                    contextXml = (ContextXml) Catalina.class.getClassLoader().loadClass(contextXmlClassName).newInstance();
+                } catch (Exception e) {
+                    // Ignore, no generated code found
+                }
             }
             if (contextXml != null) {
                 contextXml.load(context);
@@ -685,7 +685,6 @@ public class ContextConfig implements LifecycleListener {
                         // Ignore
                     }
                     digester.endGeneratingCode();
-                    Digester.addGeneratedClass(contextXmlClassName);
                 }
             }
         }
@@ -984,6 +983,10 @@ public class ContextConfig implements LifecycleListener {
 
         webConfig();
 
+        // TODO 添加JSP解析器的代码
+        context.addServletContainerInitializer(new JasperInitializer(), null);
+
+
         if (!context.getIgnoreAnnotations()) {
             applicationAnnotationsConfig();
         }
@@ -1056,6 +1059,22 @@ public class ContextConfig implements LifecycleListener {
             context.removeConstraint(securityConstraints[i]);
         }
 
+        // Removing Ejbs
+        /*
+        ContextEjb[] contextEjbs = context.findEjbs();
+        for (i = 0; i < contextEjbs.length; i++) {
+            context.removeEjb(contextEjbs[i].getName());
+        }
+        */
+
+        // Removing environments
+        /*
+        ContextEnvironment[] contextEnvironments = context.findEnvironments();
+        for (i = 0; i < contextEnvironments.length; i++) {
+            context.removeEnvironment(contextEnvironments[i].getName());
+        }
+        */
+
         // Removing errors pages
         ErrorPage[] errorPages = context.findErrorPages();
         for (i = 0; i < errorPages.length; i++) {
@@ -1074,6 +1093,14 @@ public class ContextConfig implements LifecycleListener {
             context.removeFilterMap(filterMaps[i]);
         }
 
+        // Removing local ejbs
+        /*
+        ContextLocalEjb[] contextLocalEjbs = context.findLocalEjbs();
+        for (i = 0; i < contextLocalEjbs.length; i++) {
+            context.removeLocalEjb(contextLocalEjbs[i].getName());
+        }
+        */
+
         // Removing Mime mappings
         String[] mimeMappings = context.findMimeMappings();
         for (i = 0; i < mimeMappings.length; i++) {
@@ -1086,6 +1113,31 @@ public class ContextConfig implements LifecycleListener {
             context.removeParameter(parameters[i]);
         }
 
+        // Removing resource env refs
+        /*
+        String[] resourceEnvRefs = context.findResourceEnvRefs();
+        for (i = 0; i < resourceEnvRefs.length; i++) {
+            context.removeResourceEnvRef(resourceEnvRefs[i]);
+        }
+        */
+
+        // Removing resource links
+        /*
+        ContextResourceLink[] contextResourceLinks =
+            context.findResourceLinks();
+        for (i = 0; i < contextResourceLinks.length; i++) {
+            context.removeResourceLink(contextResourceLinks[i].getName());
+        }
+        */
+
+        // Removing resources
+        /*
+        ContextResource[] contextResources = context.findResources();
+        for (i = 0; i < contextResources.length; i++) {
+            context.removeResource(contextResources[i].getName());
+        }
+        */
+
         // Removing security role
         String[] securityRoles = context.findSecurityRoles();
         for (i = 0; i < securityRoles.length; i++) {
@@ -1097,6 +1149,8 @@ public class ContextConfig implements LifecycleListener {
         for (i = 0; i < servletMappings.length; i++) {
             context.removeServletMapping(servletMappings[i]);
         }
+
+        // FIXME : Removing status pages
 
         // Removing welcome files
         String[] welcomeFiles = context.findWelcomeFiles();
@@ -1375,14 +1429,7 @@ public class ContextConfig implements LifecycleListener {
     protected void processClasses(WebXml webXml, Set<WebXml> orderedFragments) {
         // Step 4. Process /WEB-INF/classes for annotations and
         // @HandlesTypes matches
-
-        Map<String, JavaClassCacheEntry> javaClassCache;
-
-        if (context.isParallelAnnotationScanning()) {
-            javaClassCache = new ConcurrentHashMap<>();
-        } else {
-            javaClassCache = new HashMap<>();
-        }
+        Map<String, JavaClassCacheEntry> javaClassCache = new HashMap<>();
 
         if (ok) {
             WebResource[] webResources =
@@ -2144,85 +2191,26 @@ public class ContextConfig implements LifecycleListener {
     }
 
     protected void processAnnotations(Set<WebXml> fragments,
-            boolean handlesTypesOnly, Map<String, JavaClassCacheEntry> javaClassCache) {
+            boolean handlesTypesOnly, Map<String,JavaClassCacheEntry> javaClassCache) {
+        for(WebXml fragment : fragments) {
+            // Only need to scan for @HandlesTypes matches if any of the
+            // following are true:
+            // - it has already been determined only @HandlesTypes is required
+            //   (e.g. main web.xml has metadata-complete="true"
+            // - this fragment is for a container JAR (Servlet 3.1 section 8.1)
+            // - this fragment has metadata-complete="true"
+            boolean htOnly = handlesTypesOnly || !fragment.getWebappJar() ||
+                    fragment.isMetadataComplete();
 
-        if (context.isParallelAnnotationScanning()) {
-            processAnnotationsInParallel(fragments, handlesTypesOnly, javaClassCache);
-        } else {
-            for (WebXml fragment : fragments) {
-                scanWebXmlFragment(handlesTypesOnly, fragment, javaClassCache);
-            }
-        }
-    }
-
-    private void scanWebXmlFragment(boolean handlesTypesOnly, WebXml fragment, Map<String, JavaClassCacheEntry> javaClassCache) {
-
-        // Only need to scan for @HandlesTypes matches if any of the
-        // following are true:
-        // - it has already been determined only @HandlesTypes is required
-        //   (e.g. main web.xml has metadata-complete="true"
-        // - this fragment is for a container JAR (Servlet 3.1 section 8.1)
-        // - this fragment has metadata-complete="true"
-        boolean htOnly = handlesTypesOnly || !fragment.getWebappJar() ||
-                fragment.isMetadataComplete();
-
-        WebXml annotations = new WebXml();
-        // no impact on distributable
-        annotations.setDistributable(true);
-        URL url = fragment.getURL();
-        processAnnotationsUrl(url, annotations, htOnly, javaClassCache);
-        Set<WebXml> set = new HashSet<>();
-        set.add(annotations);
-        // Merge annotations into fragment - fragment takes priority
-        fragment.merge(set);
-    }
-
-    /**
-     * Executable task to scan a segment for annotations. Each task does the
-     * same work as the for loop inside processAnnotations();
-     */
-    private class AnnotationScanTask implements Runnable {
-        private final WebXml fragment;
-        private final boolean handlesTypesOnly;
-        private Map<String, JavaClassCacheEntry> javaClassCache;
-
-        private AnnotationScanTask(WebXml fragment, boolean handlesTypesOnly, Map<String, JavaClassCacheEntry> javaClassCache) {
-            this.fragment = fragment;
-            this.handlesTypesOnly = handlesTypesOnly;
-            this.javaClassCache = javaClassCache;
-        }
-
-        @Override
-        public void run() {
-            scanWebXmlFragment(handlesTypesOnly, fragment, javaClassCache);
-        }
-
-    }
-
-    /**
-     * Parallelized version of processAnnotationsInParallel(). Constructs tasks,
-     * submits them as they're created, then waits for completion.
-     *
-     * @param fragments        Set of parallelizable scans
-     * @param handlesTypesOnly Important parameter for the underlying scan
-     * @param javaClassCache The class cache
-     */
-    protected void processAnnotationsInParallel(Set<WebXml> fragments, boolean handlesTypesOnly,
-                                                Map<String, JavaClassCacheEntry> javaClassCache) {
-        Server s = getServer();
-        ExecutorService pool = null;
-        pool = s.getUtilityExecutor();
-        List<Future<?>> futures = new ArrayList<>(fragments.size());
-        for (WebXml fragment : fragments) {
-            Runnable task = new AnnotationScanTask(fragment, handlesTypesOnly, javaClassCache);
-            futures.add(pool.submit(task));
-        }
-        try {
-            for (Future<?> future : futures) {
-                future.get();
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(sm.getString("contextConfig.processAnnotationsInParallelFailure"), e);
+            WebXml annotations = new WebXml();
+            // no impact on distributable
+            annotations.setDistributable(true);
+            URL url = fragment.getURL();
+            processAnnotationsUrl(url, annotations, htOnly, javaClassCache);
+            Set<WebXml> set = new HashSet<>();
+            set.add(annotations);
+            // Merge annotations into fragment - fragment takes priority
+            fragment.merge(set);
         }
     }
 

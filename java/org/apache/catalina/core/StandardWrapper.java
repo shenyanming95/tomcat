@@ -70,14 +70,13 @@ import org.apache.tomcat.util.modeler.Util;
  * @author Craig R. McClanahan
  * @author Remy Maucherat
  */
-@SuppressWarnings("deprecation") // SingleThreadModel
-public class StandardWrapper extends ContainerBase
-    implements ServletConfig, Wrapper, NotificationEmitter {
+@SuppressWarnings("deprecation")
+public class StandardWrapper extends ContainerBase implements ServletConfig, Wrapper, NotificationEmitter {
 
-    private final Log log = LogFactory.getLog(StandardWrapper.class); // must not be static
+    // must not be static
+    private final Log log = LogFactory.getLog(StandardWrapper.class);
 
-    protected static final String[] DEFAULT_SERVLET_METHODS = new String[] {
-                                                    "GET", "HEAD", "POST" };
+    protected static final String[] DEFAULT_SERVLET_METHODS = new String[] {"GET", "HEAD", "POST" };
 
     // ----------------------------------------------------------- Constructors
 
@@ -86,9 +85,8 @@ public class StandardWrapper extends ContainerBase
      * Create a new StandardWrapper component with the default basic Valve.
      */
     public StandardWrapper() {
-
         super();
-        swValve=new StandardWrapperValve();
+        swValve = new StandardWrapperValve();
         pipeline.setBasic(swValve);
         broadcaster = new NotificationBroadcasterSupport();
 
@@ -112,8 +110,8 @@ public class StandardWrapper extends ContainerBase
     protected final NotificationBroadcasterSupport broadcaster;
 
     /**
-     * The count of allocations that are currently active (even if they
-     * are for the same instance, as will be true on a non-STM servlet).
+     * 当前处于活动状态的分配计数, 即使它们用于同一实例, 对于非STM Servlet也是如此.
+     * STM的意思是Single Thread Model, 每个线程对应每个Servlet.
      */
     protected final AtomicInteger countAllocated = new AtomicInteger(0);
 
@@ -125,13 +123,13 @@ public class StandardWrapper extends ContainerBase
 
 
     /**
-     * The (single) possibly uninitialized instance of this servlet.
+     * 此Servlet的（单个）可能未初始化的实例
      */
     protected volatile Servlet instance = null;
 
 
     /**
-     * Flag that indicates if this instance has been initialized
+     * 标志此实例是否已初始化的标志
      */
     protected volatile boolean instanceInitialized = false;
 
@@ -150,16 +148,14 @@ public class StandardWrapper extends ContainerBase
 
 
     /**
-     * The initialization parameters for this servlet, keyed by
-     * parameter name.
+     * 此Servlet的初始化参数，以参数名称作为关键字
      */
     protected HashMap<String, String> parameters = new HashMap<>();
 
 
     /**
-     * The security role references for this servlet, keyed by role name
-     * used in the servlet.  The corresponding value is the role name of
-     * the web application itself.
+     * 此Servlet的安全角色引用，由该Servlet中使用的角色名称键入。
+     * 相应的值是Web应用程序本身的角色名称。
      */
     protected HashMap<String, String> references = new HashMap<>();
 
@@ -181,43 +177,43 @@ public class StandardWrapper extends ContainerBase
 
 
     /**
-     * Does this servlet implement the SingleThreadModel interface?
+     * 表示当前Servlet是否实现SingleThreadModel接口
      */
     protected volatile boolean singleThreadModel = false;
 
 
     /**
-     * Are we unloading our servlet instance at the moment?
+     * 表示是否正在卸载Servlet
      */
     protected volatile boolean unloading = false;
 
 
     /**
-     * Maximum number of STM instances.
+     * STM实例的最大数量
      */
     protected int maxInstances = 20;
 
 
     /**
-     * Number of instances currently loaded for a STM servlet.
+     * 当前为STM Servlet加载的实例数
      */
     protected int nInstances = 0;
 
 
     /**
-     * Stack containing the STM instances.
+     * 包含STM实例的堆栈
      */
     protected Stack<Servlet> instancePool = null;
 
 
     /**
-     * Wait time for servlet unload in ms.
+     * Servlet卸载的等待时间（毫秒）
      */
     protected long unloadDelay = 2000;
 
 
     /**
-     * True if this StandardWrapper is for the JspServlet
+     * 如果此StandardWrapper用于JspServlet，则为true
      */
     protected boolean isJspServlet;
 
@@ -261,14 +257,12 @@ public class StandardWrapper extends ContainerBase
      */
     protected static Class<?>[] classType = new Class[]{ServletConfig.class};
 
-    private final ReentrantReadWriteLock parametersLock =
-            new ReentrantReadWriteLock();
+    //
+    private final ReentrantReadWriteLock parametersLock = new ReentrantReadWriteLock();
 
-    private final ReentrantReadWriteLock mappingsLock =
-            new ReentrantReadWriteLock();
+    private final ReentrantReadWriteLock mappingsLock = new ReentrantReadWriteLock();
 
-    private final ReentrantReadWriteLock referencesLock =
-            new ReentrantReadWriteLock();
+    private final ReentrantReadWriteLock referencesLock = new ReentrantReadWriteLock();
 
 
     // ------------------------------------------------------------- Properties
@@ -742,28 +736,22 @@ public class StandardWrapper extends ContainerBase
         if (unloading) {
             throw new ServletException(sm.getString("standardWrapper.unloading", getName()));
         }
-
         boolean newInstance = false;
-
-        // If not SingleThreadedModel, return the same instance every time
+        // 如果目标Servlet没有实现SingleThreadModel接口, 每次返回同一个实例.
+        // 还有一种情况是, 当Servlet还未加载的时候, 那么这个值默认为false, 就会进入下面的逻辑
         if (!singleThreadModel) {
-            // Load and initialize our instance if necessary
             if (instance == null || !instanceInitialized) {
+                // Servlet实例未创建, 或者还未初始化
                 synchronized (this) {
                     if (instance == null) {
                         try {
                             if (log.isDebugEnabled()) {
                                 log.debug("Allocating non-STM instance");
                             }
-
-                            // Note: We don't know if the Servlet implements
-                            // SingleThreadModel until we have loaded it.
+                            // 加载之后才知道Servlet接口是否有实现 SingleThreadModel
                             instance = loadServlet();
                             newInstance = true;
                             if (!singleThreadModel) {
-                                // For non-STM, increment here to prevent a race
-                                // condition with unload. Bug 43683, test case
-                                // #3
                                 countAllocated.incrementAndGet();
                             }
                         } catch (ServletException e) {
@@ -774,15 +762,17 @@ public class StandardWrapper extends ContainerBase
                         }
                     }
                     if (!instanceInitialized) {
+                        // 加载后还没有初始化, 那就初始化它
                         initServlet(instance);
                     }
                 }
             }
-
+            // 上面分析过, 只有Servlet加载后才知道是否实现了 SingleThreadModel 接口,
+            // 这边就是加载完Servlet后发现它实现SingleThreadModel接口, 就将它放入到池中.
+            // 或者下一次请求过来, 发现不是 STM 模式, 并且已经创建好了, 那就直接返回实例.
             if (singleThreadModel) {
                 if (newInstance) {
-                    // Have to do this outside of the sync above to prevent a
-                    // possible deadlock
+                    // 必须将这个加锁逻辑, 放在上面加锁之外, 否则容易发生死锁.
                     synchronized (instancePool) {
                         instancePool.push(instance);
                         nInstances++;
@@ -792,8 +782,7 @@ public class StandardWrapper extends ContainerBase
                 if (log.isTraceEnabled()) {
                     log.trace("  Returning non-STM instance");
                 }
-                // For new instances, count will have been incremented at the
-                // time of creation
+                // 对于新实例，计数将在创建时增加
                 if (!newInstance) {
                     countAllocated.incrementAndGet();
                 }
@@ -801,9 +790,13 @@ public class StandardWrapper extends ContainerBase
             }
         }
 
+        // 如果是 STM 模式, 进入下面的逻辑
         synchronized (instancePool) {
+            // countAllocated, 表示：当前处于活动状态的分配计数;
+            // nInstance, 表示：STM Servlet加载的实例数;
             while (countAllocated.get() >= nInstances) {
-                // Allocate a new instance if possible, or else wait
+                // maxInstances, 表示：允许创建STM实例的最大数量
+                // 如果小于最大的实例数, 那就再加载一个Servlet入池
                 if (nInstances < maxInstances) {
                     try {
                         instancePool.push(loadServlet());
@@ -815,6 +808,7 @@ public class StandardWrapper extends ContainerBase
                         throw new ServletException(sm.getString("standardWrapper.allocate"), e);
                     }
                 } else {
+                    // 如果已经入池的STM Servlet数量大于等于 maxInstances, 等待池中元素弹出
                     try {
                         instancePool.wait();
                     } catch (InterruptedException e) {
@@ -823,7 +817,7 @@ public class StandardWrapper extends ContainerBase
                 }
             }
             if (log.isTraceEnabled()) {
-                log.trace("  Returning allocated STM instance");
+                log.trace("Returning allocated STM instance");
             }
             countAllocated.incrementAndGet();
             return instancePool.pop();
@@ -832,23 +826,19 @@ public class StandardWrapper extends ContainerBase
 
 
     /**
-     * Return this previously allocated servlet to the pool of available
-     * instances.  If this servlet class does not implement SingleThreadModel,
-     * no action is actually required.
+     * 将此先前分配的servlet返回到可用实例池。
+     * 如果此Servlet类未实现SingleThreadModel，则实际上无需执行任何操作
      *
      * @param servlet The servlet to be returned
-     *
      * @exception ServletException if a deallocation error occurs
      */
     @Override
     public void deallocate(Servlet servlet) throws ServletException {
-
         // If not SingleThreadModel, no action is required
         if (!singleThreadModel) {
             countAllocated.decrementAndGet();
             return;
         }
-
         // Unlock and free this instance
         synchronized (instancePool) {
             countAllocated.decrementAndGet();
@@ -867,14 +857,12 @@ public class StandardWrapper extends ContainerBase
      */
     @Override
     public String findInitParameter(String name) {
-
         parametersLock.readLock().lock();
         try {
             return parameters.get(name);
         } finally {
             parametersLock.readLock().unlock();
         }
-
     }
 
 
@@ -884,15 +872,13 @@ public class StandardWrapper extends ContainerBase
      */
     @Override
     public String[] findInitParameters() {
-
         parametersLock.readLock().lock();
         try {
-            String results[] = new String[parameters.size()];
+            String[] results = new String[parameters.size()];
             return parameters.keySet().toArray(results);
         } finally {
             parametersLock.readLock().unlock();
         }
-
     }
 
 
