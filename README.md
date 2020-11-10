@@ -1,79 +1,36 @@
-## Welcome to Apache Tomcat!
+## Apache-Tomcat-9.0.X
 
-### What Is It?
+apache-tomcat默认使用Ant编译,，这里更换为Maven编译，同时做了以下处理：
 
-The Apache Tomcat® software is an open source implementation of the Java
-Servlet, JavaServer Pages, Java Expression Language and Java WebSocket
-technologies. The Java Servlet, JavaServer Pages, Java Expression Language and
-Java WebSocket specifications are developed under the
-[Java Community Process](https://jcp.org/en/introduction/overview).
+- 添加[pom.xml](pom.xml)
 
-The Apache Tomcat software is developed in an open and participatory
-environment and released under the
-[Apache License version 2](https://www.apache.org/licenses/). The Apache Tomcat
-project is intended to be a collaboration of the best-of-breed developers from
-around the world. We invite you to participate in this open development
-project. To learn more about getting involved,
-[click here](https://tomcat.apache.org/getinvolved.html) or keep reading.
+- 新建home目录, 将源码目录的`/conf`和`/webapps`移动到home目录下；
 
-Apache Tomcat software powers numerous large-scale, mission-critical web
-applications across a diverse range of industries and organizations. Some of
-these users and their stories are listed on the
-[PoweredBy wiki page](https://wiki.apache.org/tomcat/PoweredBy).
+- 标记目录`/java`为源码目录，去掉`/test`测试目录；
 
-Apache Tomcat, Tomcat, Apache, the Apache feather, and the Apache Tomcat
-project logo are trademarks of the Apache Software Foundation.
+- 启动类`org.apache.catalina.startup.Bootstrap`添加如下代码, 设置catalina的目录
+    ```java
+     System.setProperty(Constants.CATALINA_HOME_PROP, userDir.concat("/home"));
+    ```
 
-### Get It
+- `org.apache.catalina.startup.ContextConfig`类的 configureStart() 方法，添加初始化 JSP 解析器的代码:
 
-For every major Tomcat version there is one download page containing
-links to the latest binary and source code downloads, but also
-links for browsing the download directories and archives:
-- [Tomcat 9](https://tomcat.apache.org/download-90.cgi)
-- [Tomcat 8](https://tomcat.apache.org/download-80.cgi)
-- [Tomcat 7](https://tomcat.apache.org/download-70.cgi)
+  ```java
+  context.addServletContainerInitializer(new JasperInitializer(), null);
+  ```
 
-To facilitate choosing the right major Tomcat version one, we have provided a
-[version overview page](https://tomcat.apache.org/whichversion.html).
+- 日志乱码处理(java读取文件的默认格式是iso8859-1, 而tomcat中文存储的时候一般是UTF-8，所以导致读出来的是乱码)，需要修改的代码位置：
 
-### Documentation
+  - `org.apache.tomcat.util.res.StringManager#getString(final String key, final Object... args)`
+  - `org.apache.jasper.compiler.Localizer#getMessage(String errCode)`
 
-The documentation available as of the date of this release is
-included in the docs webapp which ships with tomcat. You can access that webapp
-by starting tomcat and visiting <http://localhost:8080/docs/> in your browser.
-The most up-to-date documentation for each version can be found at:
-- [Tomcat 9](https://tomcat.apache.org/tomcat-9.0-doc/)
-- [Tomcat 8](https://tomcat.apache.org/tomcat-8.5-doc/)
-- [Tomcat 7](https://tomcat.apache.org/tomcat-7.0-doc/)
+  增加如下的编码处理：
 
-### Installation
-
-Please see [RUNNING.txt](RUNNING.txt) for more info.
-
-### Licensing
-
-Please see [LICENSE](LICENSE) for more info.
-
-### Support and Mailing List Information
-
-* Free community support is available through the
-[tomcat-users](https://tomcat.apache.org/lists.html#tomcat-users) email list and
-a dedicated [IRC channel](https://tomcat.apache.org/irc.html) (#tomcat on
-Freenode).
-
-* If you want freely available support for running Apache Tomcat, please see the
-resources page [here](https://tomcat.apache.org/findhelp.html).
-
-* If you want to be informed about new code releases, bug fixes,
-security fixes, general news and information about Apache Tomcat, please
-subscribe to the
-[tomcat-announce](https://tomcat.apache.org/lists.html#tomcat-announce) email
-list.
-
-* If you have a concrete bug report for Apache Tomcat, please see the
-instructions for reporting a bug
-[here](https://tomcat.apache.org/bugreport.html).
-
-### Contributing
-
-Please see [CONTRIBUTING](CONTRIBUTING.md) for more info.
+  ```java
+  try {
+      value = new String(value.getBytes(StandardCharsets.ISO_8859_1), 
+                         StandardCharsets.UTF_8);
+  } catch(Exception e){
+      e.printStackTrace();
+  }
+  ```
