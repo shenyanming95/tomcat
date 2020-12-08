@@ -280,6 +280,7 @@ public final class ExpressionBuilder implements NodeVisitor {
          */
         private int index = -1;
 
+        // 内部维护一个对象数组, 用数组实现栈的功能
         private Object[] stack;
 
 
@@ -293,11 +294,12 @@ public final class ExpressionBuilder implements NodeVisitor {
             stack = new Object[size];
         }
 
-
+        // 这个方法用来归还对象，用 synchronized 进行线程同步
         public synchronized boolean push(T obj) {
             index++;
             if (index == size) {
                 if (limit == -1 || size < limit) {
+                    // 对象不够用了，扩展对象数组
                     expand();
                 } else {
                     index--;
@@ -308,6 +310,7 @@ public final class ExpressionBuilder implements NodeVisitor {
             return true;
         }
 
+        // 这个方法用来获取对象
         @SuppressWarnings("unchecked")
         public synchronized T pop() {
             if (index == -1) {
@@ -318,6 +321,7 @@ public final class ExpressionBuilder implements NodeVisitor {
             return result;
         }
 
+        // 扩展对象数组长度，以 2 倍大小扩展
         private void expand() {
             int newSize = size * 2;
             if (limit != -1 && newSize > limit) {
