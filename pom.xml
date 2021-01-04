@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
- 
+
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.sym</groupId>
     <artifactId>apache-tomcat</artifactId>
@@ -43,8 +43,25 @@
             <version>4.0.2</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- 更换tomcat自带的JDK日志 -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.25</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.2.3</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-core</artifactId>
+            <version>1.2.3</version>
+        </dependency>
     </dependencies>
- 
+
     <build>
         <plugins>
             <plugin>
@@ -64,6 +81,28 @@
                 </configuration>
             </plugin>
         </plugins>
+
+        <!-- tomcat将许多配置文件放在src目录, 而maven默认不会在src目录编译这些配置文件, 所以
+         这里的配置就是让maven来编译这些文件-->
+        <resources>
+            <resource>
+                <directory>src/main/java</directory>
+                <includes>
+                    <include>**/*.properties</include>
+                    <include>**/*.xml</include>
+                    <include>**/*.dtd</include>
+                    <include>**/*.html</include>
+                </includes>
+                <filtering>true</filtering>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <includes>
+                    <include>**/*</include>
+                </includes>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
     </build>
- 
+
 </project>
