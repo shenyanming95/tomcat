@@ -24,10 +24,13 @@ import org.apache.juli.logging.LogFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -74,6 +77,14 @@ public final class Bootstrap {
 
         //String homePath = userDir.concat("/home");
         String homePath = url.getPath();
+
+        try {
+            // 防止中文乱码
+            homePath = URLDecoder.decode(homePath, StandardCharsets.UTF_8.name());
+        } catch (UnsupportedEncodingException e) {
+            throw new IllegalArgumentException(e);
+        }
+
         System.setProperty(Constants.CATALINA_HOME_PROP, homePath);
 
         // 获取catalina目录(系统变量获取)
