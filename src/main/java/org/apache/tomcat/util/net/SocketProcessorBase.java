@@ -18,6 +18,10 @@ package org.apache.tomcat.util.net;
 
 import java.util.Objects;
 
+/**
+ * SocketProcessor的抽象父类, 主要是用来保存 Socket 和 Socket事件.
+ * @param <S> I/O模型
+ */
 public abstract class SocketProcessorBase<S> implements Runnable {
 
     protected SocketWrapperBase<S> socketWrapper;
@@ -27,16 +31,15 @@ public abstract class SocketProcessorBase<S> implements Runnable {
         reset(socketWrapper, event);
     }
 
-
     public void reset(SocketWrapperBase<S> socketWrapper, SocketEvent event) {
         Objects.requireNonNull(event);
         this.socketWrapper = socketWrapper;
         this.event = event;
     }
 
-
     @Override
     public final void run() {
+        // 保证一个Socket只会被一个线程处理.
         synchronized (socketWrapper) {
             // It is possible that processing may be triggered for read and
             // write at the same time. The sync above makes sure that processing

@@ -21,6 +21,9 @@ import org.apache.tomcat.util.buf.ByteBufferUtils;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 
+/**
+ * 操作 {@link ByteBuffer} 的处理器
+ */
 public class SocketBufferHandler {
 
     static SocketBufferHandler EMPTY = new SocketBufferHandler(0, 0, false) {
@@ -37,8 +40,7 @@ public class SocketBufferHandler {
 
     private final boolean direct;
 
-    public SocketBufferHandler(int readBufferSize, int writeBufferSize,
-            boolean direct) {
+    public SocketBufferHandler(int readBufferSize, int writeBufferSize, boolean direct) {
         this.direct = direct;
         if (direct) {
             readBuffer = ByteBuffer.allocateDirect(readBufferSize);
@@ -49,11 +51,9 @@ public class SocketBufferHandler {
         }
     }
 
-
     public void configureReadBufferForWrite() {
         setReadBufferConfiguredForWrite(true);
     }
-
 
     public void configureReadBufferForRead() {
         setReadBufferConfiguredForWrite(false);
@@ -79,11 +79,9 @@ public class SocketBufferHandler {
         }
     }
 
-
     public ByteBuffer getReadBuffer() {
         return readBuffer;
     }
-
 
     public boolean isReadBufferEmpty() {
         if (readBufferConfiguredForWrite) {
@@ -92,7 +90,6 @@ public class SocketBufferHandler {
             return readBuffer.remaining() == 0;
         }
     }
-
 
     public void unReadReadBuffer(ByteBuffer returnedData) {
         if (isReadBufferEmpty()) {
@@ -197,14 +194,12 @@ public class SocketBufferHandler {
         }
     }
 
-
     public void reset() {
         readBuffer.clear();
         readBufferConfiguredForWrite = true;
         writeBuffer.clear();
         writeBufferConfiguredForWrite = true;
     }
-
 
     public void expand(int newSize) {
         configureReadBufferForWrite();

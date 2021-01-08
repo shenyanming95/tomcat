@@ -35,19 +35,24 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * 用于包裹Socket的
+ * @param <E> 不同I/O模型的Socket类型, 比如：nio对应NioChannel, aio对应Nio2Channel
+ */
 public abstract class SocketWrapperBase<E> {
 
     private static final Log log = LogFactory.getLog(SocketWrapperBase.class);
-
     protected static final StringManager sm = StringManager.getManager(SocketWrapperBase.class);
 
+    /**
+     * Socket对象, 一般不会是java原装, 而是原装socket的包裹类
+     */
     private E socket;
-    private final AbstractEndpoint<E,?> endpoint;
 
+    private final AbstractEndpoint<E,?> endpoint;
     protected final AtomicBoolean closed = new AtomicBoolean(false);
 
-    // Volatile because I/O and setting the timeout values occurs on a different
-    // thread to the thread checking the timeout.
+    // Volatile because I/O and setting the timeout values occurs on a different thread to the thread checking the timeout.
     private volatile long readTimeout = -1;
     private volatile long writeTimeout = -1;
 
@@ -104,8 +109,7 @@ public abstract class SocketWrapperBase<E> {
     protected volatile OperationState<?> writeOperation = null;
 
     /**
-     * The org.apache.coyote.Processor instance currently associated
-     * with the wrapper.
+     * The org.apache.coyote.Processor instance currently associated with the wrapper.
      */
     protected Object currentProcessor = null;
 

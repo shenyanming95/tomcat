@@ -51,8 +51,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-public abstract class AbstractProtocol<S> implements ProtocolHandler,
-        MBeanRegistration {
+public abstract class AbstractProtocol<S> implements ProtocolHandler, MBeanRegistration {
 
     /**
      * The string manager for this package.
@@ -772,14 +771,14 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                 // Nothing to do. Socket has been closed.
                 return SocketState.CLOSED;
             }
-            // 获取底层的Socket对象
+            // 获取 Tomcat 包装的 Socket 对象, 如果是 NIO 模型, 这里就是 NioChannel
             S socket = wrapper.getSocket();
+            // 获取SocketWrapper关联的 Processor, 一般这里为null
             Processor processor = (Processor) wrapper.getCurrentProcessor();
             if (getLog().isDebugEnabled()) {
                 getLog().debug(sm.getString("abstractConnectionHandler.connectionsGet", processor, socket));
             }
-            // 超时是在专用线程上计算的, 然后分派. 由于调度过程中的延迟,
-            // 可能不再需要超时. 检查此处, 避免不必要的处理.
+            // 超时是在专用线程上计算的, 然后分派. 由于调度过程中的延迟, 可能不再需要超时. 检查此处, 避免不必要的处理.
             if (SocketEvent.TIMEOUT == status &&
                     (processor == null || !processor.isAsync()
                             && !processor.isUpgrade() || processor.isAsync()
@@ -829,7 +828,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                         }
                     }
                 }
-                // 未设置任何协议, 优先从对象池中获取
+                // 未设置任何处理器, 优先从对象池中获取
                 if (processor == null) {
                     processor = recycledProcessors.pop();
                     if (getLog().isDebugEnabled()) {
@@ -857,8 +856,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                 do {
                     // 开始处理Socket, 然后返回状态值
                     state = processor.process(wrapper, status);
-                    // 当发现返回的Socket状态为UPGRADING, 说明需要升级协议,
-                    // 具体场景要后面分析..
+                    // 当发现返回的Socket状态为UPGRADING, 说明需要升级协议, 具体场景要后面分析..
                     if (state == SocketState.UPGRADING) {
                         // Get the HTTP upgrade handler
                         UpgradeToken upgradeToken = processor.getUpgradeToken();
@@ -921,7 +919,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                             }
                         }
                     }
-                } while ( state == SocketState.UPGRADING);
+                } while (state == SocketState.UPGRADING);
 
                 if (state == SocketState.LONG) {
                     // 在处理请求响应期间, 保持socket与processor关联。确切的要求取决于长轮询的类型
@@ -1092,8 +1090,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                 synchronized (this) {
                     try {
                         long count = registerCount.incrementAndGet();
-                        RequestInfo rp =
-                            processor.getRequest().getRequestProcessor();
+                        RequestInfo rp = processor.getRequest().getRequestProcessor();
                         rp.setGlobalProcessor(global);
                         ObjectName rpName = new ObjectName(
                                 getProtocol().getDomain() +
@@ -1104,8 +1101,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                         if (getLog().isDebugEnabled()) {
                             getLog().debug("Register [" + processor + "] as [" + rpName + "]");
                         }
-                        Registry.getRegistry(null, null).registerComponent(rp,
-                                rpName, null);
+                        Registry.getRegistry(null, null).registerComponent(rp, rpName, null);
                         rp.setRpName(rpName);
                     } catch (Exception e) {
                         getLog().warn(sm.getString("abstractProtocol.processorRegisterError"), e);

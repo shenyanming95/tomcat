@@ -57,38 +57,31 @@ import java.util.concurrent.TimeUnit;
  *            May be the same as U.
  * @param <U> The type of the underlying socket used by this endpoint. May be
  *            the same as S.
- *
  * @author Mladen Turk
  * @author Remy Maucherat
  */
-public abstract class AbstractEndpoint<S,U> {
+public abstract class AbstractEndpoint<S, U> {
 
-    // -------------------------------------------------------------- Constants
+    // -------------------------------------------------------------- inner class
 
-    protected static final StringManager sm = StringManager.getManager(AbstractEndpoint.class);
-
-    public static interface Handler<S> {
+    public interface Handler<S> {
 
         /**
-         * 不同类型的套接字状态可以做出反应。
+         * 不同类型的套接字状态可以做出反应
          */
-        public enum SocketState {
-            // TODO Add a new state to the AsyncStateMachine and remove
-            //      ASYNC_END (if possible)
+        enum SocketState {
+            // TODO Add a new state to the AsyncStateMachine and remove ASYNC_END (if possible)
             OPEN, CLOSED, LONG, ASYNC_END, SENDFILE, UPGRADING, UPGRADED, SUSPENDED
         }
-
 
         /**
          * Process the provided socket with the given current status.
          *
          * @param socket The socket to process
          * @param status The current socket status
-         *
          * @return The state of the socket after processing
          */
-        public SocketState process(SocketWrapperBase<S> socket,
-                SocketEvent status);
+        SocketState process(SocketWrapperBase<S> socket, SocketEvent status);
 
 
         /**
@@ -96,26 +89,26 @@ public abstract class AbstractEndpoint<S,U> {
          *
          * @return the GlobalRequestProcessor
          */
-        public Object getGlobal();
+        Object getGlobal();
 
 
         /**
          * Obtain the currently open sockets.
          *
          * @return The sockets for which the handler is tracking a currently
-         *         open connection
+         * open connection
          * @deprecated Unused, will be removed in Tomcat 10, replaced
-         *         by AbstractEndpoint.getConnections
+         * by AbstractEndpoint.getConnections
          */
         @Deprecated
-        public Set<S> getOpenSockets();
+        Set<S> getOpenSockets();
 
         /**
          * Release any resources associated with the given SocketWrapper.
          *
          * @param socketWrapper The socketWrapper to release resources for
          */
-        public void release(SocketWrapperBase<S> socketWrapper);
+        void release(SocketWrapperBase<S> socketWrapper);
 
 
         /**
@@ -124,32 +117,29 @@ public abstract class AbstractEndpoint<S,U> {
          * afterwards but it is possible that the endpoint will be resumed so
          * the handler should not assume that a stop will follow.
          */
-        public void pause();
+        void pause();
 
 
         /**
          * Recycle resources associated with the handler.
          */
-        public void recycle();
+        void recycle();
     }
 
     protected enum BindState {
         UNBOUND, BOUND_ON_INIT, BOUND_ON_START, SOCKET_CLOSED_ON_STOP
     }
 
+    // -------------------------------------------------------------- Constants
 
-    public static long toTimeout(long timeout) {
-        // Many calls can't do infinite timeout so use Long.MAX_VALUE if timeout is <= 0
-        return (timeout > 0) ? timeout : Long.MAX_VALUE;
-    }
+    protected static final StringManager sm = StringManager.getManager(AbstractEndpoint.class);
 
-    // ----------------------------------------------------------------- Fields
+    // ----------------------------------------------------------------- protected Fields
 
     /**
      * Running state of the endpoint.
      */
     protected volatile boolean running = false;
-
 
     /**
      * Will be set to true whenever the endpoint is paused.
@@ -161,19 +151,10 @@ public abstract class AbstractEndpoint<S,U> {
      */
     protected volatile boolean internalExecutor = true;
 
-
-    /**
-     * counter for nr of connections handled by an endpoint
-     */
-    private volatile LimitLatch connectionLimitLatch = null;
-
     /**
      * Socket properties
      */
     protected final SocketProperties socketProperties = new SocketProperties();
-    public SocketProperties getSocketProperties() {
-        return socketProperties;
-    }
 
     /**
      * Thread used to accept new connections and pass them to worker threads.
@@ -185,45 +166,192 @@ public abstract class AbstractEndpoint<S,U> {
      */
     protected SynchronizedStack<SocketProcessorBase<S>> processorCache;
 
-    private ObjectName oname = null;
-
     /**
      * Map holding all current connections keyed with the sockets.
      */
     protected Map<U, SocketWrapperBase<S>> connections = new ConcurrentHashMap<>();
 
     /**
+     * ssh config
+     */
+    protected ConcurrentMap<String, SSLHostConfig> sslHostConfigs = new ConcurrentHashMap<>();
+
+    /**
+     * Acceptor thread count.
+     */
+    protected int acceptorThreadCount = 1;
+
+    /**
+     * Priority of the acceptor threads.
+     */
+    protected int acceptorThreadPriority = Thread.NORM_PRIORITY;
+
+    /**
+     * Priority of the worker threads.
+     */
+    protected int threadPriority = Thread.NORM_PRIORITY;
+
+    protected final List<String> negotiableProtocols = new ArrayList<>();
+
+    /**
+     * Attributes provide a way for configuration to be passed to sub-components
+     * without the {@link org.apache.coyote.ProtocolHandler} being aware of the
+     * properties available on those sub-components.
+     */
+    protected HashMap<String, Object> attributes = new HashMap<>();
+
+    // ----------------------------------------------------------------- private Fields
+
+    /**
+     * counter for nr of connections handled by an endpoint
+     */
+    private volatile LimitLatch connectionLimitLatch = null;
+
+    private ObjectName oname = null;
+
+    private String defaultSSLHostConfigName = SSLHostConfig.DEFAULT_SSL_HOST_NAME;
+
+    private boolean useSendfile = true;
+
+    /**
+     * Time to wait for the internal executor (if used) to terminate when the
+     * endpoint is stopped in milliseconds. Defaults to 5000 (5 seconds).
+     */
+    private long executorTerminationTimeoutMillis = 5000;
+
+    /**
+     * 最大连接数
+     */
+    private int maxConnections = 8 * 1024;
+
+    /**
+     * External Executor based thread pool.
+     */
+    private Executor executor = null;
+
+    /**
+     * External Executor based thread pool for utility tasks.
+     */
+    private ScheduledExecutorService utilityExecutor = null;
+
+    /**
+     * Server socket port.
+     */
+    private int port = -1;
+
+    private int portOffset = 0;
+
+    /**
+     * Address for the server socket.
+     */
+    private InetAddress address;
+
+    /**
+     * Allows the server developer to specify the acceptCount (backlog) that
+     * should be used for server sockets. By default, this value
+     * is 100.
+     */
+    private int acceptCount = 100;
+
+    /**
+     * Controls when the Endpoint binds the port. <code>true</code>, the default
+     * binds the port on {@link #init()} and unbinds it on {@link #destroy()}.
+     * If set to <code>false</code> the port is bound on {@link #start()} and
+     * unbound on {@link #stop()}.
+     */
+    private boolean bindOnInit = true;
+
+    private volatile BindState bindState = BindState.UNBOUND;
+
+    /**
+     * Keepalive timeout, if not set the soTimeout is used.
+     */
+    private Integer keepAliveTimeout = null;
+
+    /**
+     * SSL engine.
+     */
+    private boolean SSLEnabled = false;
+
+    private int minSpareThreads = 10;
+
+    /**
+     * Maximum amount of worker threads.
+     */
+    private int maxThreads = 200;
+
+    /**
+     * Max keep alive requests
+     */
+    private int maxKeepAliveRequests = 100; // as in Apache HTTPD server
+
+    /**
+     * Name of the thread pool, which will be used for naming child threads.
+     */
+    private String name = "TP";
+
+    /**
+     * Name of domain to use for JMX registration.
+     */
+    private String domain;
+
+    /**
+     * The default is true - the created threads will be
+     * in daemon mode. If set to false, the control thread
+     * will not be daemon - and will keep the process alive.
+     */
+    private boolean daemon = true;
+
+    /**
+     * Expose asynchronous IO capability.
+     */
+    private boolean useAsyncIO = true;
+
+    /**
+     * Handling of accepted sockets.
+     */
+    private Handler<S> handler = null;
+
+
+    // ----------------------------------------------------------------- Methods
+
+
+    public static long toTimeout(long timeout) {
+        // Many calls can't do infinite timeout so use Long.MAX_VALUE if timeout is <= 0
+        return (timeout > 0) ? timeout : Long.MAX_VALUE;
+    }
+
+    public SocketProperties getSocketProperties() {
+        return socketProperties;
+    }
+
+    /**
      * Get a set with the current open connections.
+     *
      * @return A set with the open socket wrappers
      */
     public Set<SocketWrapperBase<S>> getConnections() {
         return new HashSet<>(connections.values());
     }
 
-    // ----------------------------------------------------------------- Properties
-
-    private String defaultSSLHostConfigName = SSLHostConfig.DEFAULT_SSL_HOST_NAME;
     public String getDefaultSSLHostConfigName() {
         return defaultSSLHostConfigName;
     }
+
     public void setDefaultSSLHostConfigName(String defaultSSLHostConfigName) {
         this.defaultSSLHostConfigName = defaultSSLHostConfigName;
     }
 
-
-    protected ConcurrentMap<String,SSLHostConfig> sslHostConfigs = new ConcurrentHashMap<>();
     /**
      * Add the given SSL Host configuration.
      *
      * @param sslHostConfig The configuration to add
-     *
-     * @throws IllegalArgumentException If the host name is not valid or if a
-     *                                  configuration has already been provided
-     *                                  for that host
+     * @throws IllegalArgumentException If the host name is not valid or if a configuration has already been provided for that host
      */
     public void addSslHostConfig(SSLHostConfig sslHostConfig) throws IllegalArgumentException {
         addSslHostConfig(sslHostConfig, false);
     }
+
     /**
      * Add the given SSL Host configuration, optionally replacing the existing
      * configuration for the given host.
@@ -232,7 +360,6 @@ public abstract class AbstractEndpoint<S,U> {
      * @param replace       If {@code true} replacement of an existing
      *                      configuration is permitted, otherwise any such
      *                      attempted replacement will trigger an exception
-     *
      * @throws IllegalArgumentException If the host name is not valid or if a
      *                                  configuration has already been provided
      *                                  for that host and replacement is not
@@ -271,14 +398,13 @@ public abstract class AbstractEndpoint<S,U> {
             registerJmx(sslHostConfig);
         }
     }
+
     /**
      * Removes the SSL host configuration for the given host name, if such a
      * configuration exists.
      *
-     * @param hostName  The host name associated with the SSL host configuration
-     *                  to remove
-     *
-     * @return  The SSL host configuration that was removed, if any
+     * @param hostName The host name associated with the SSL host configuration to remove
+     * @return The SSL host configuration that was removed, if any
      */
     public SSLHostConfig removeSslHostConfig(String hostName) {
         if (hostName == null) {
@@ -293,13 +419,13 @@ public abstract class AbstractEndpoint<S,U> {
         unregisterJmx(sslHostConfig);
         return sslHostConfig;
     }
+
     /**
      * Re-read the configuration files for the SSL host and replace the existing
      * SSL configuration with the updated settings. Note this replacement will
      * happen even if the settings remain unchanged.
      *
-     * @param hostName The SSL host for which the configuration should be
-     *                 reloaded. This must match a current SSL host
+     * @param hostName The SSL host for which the configuration should be reloaded. This must match a current SSL host
      */
     public void reloadSslHostConfig(String hostName) {
         SSLHostConfig sslHostConfig = sslHostConfigs.get(hostName);
@@ -309,6 +435,7 @@ public abstract class AbstractEndpoint<S,U> {
         }
         addSslHostConfig(sslHostConfig, true);
     }
+
     /**
      * Re-read the configuration files for all SSL hosts and replace the
      * existing SSL configuration with the updated settings. Note this
@@ -319,94 +446,22 @@ public abstract class AbstractEndpoint<S,U> {
             reloadSslHostConfig(hostName);
         }
     }
+
     public SSLHostConfig[] findSslHostConfigs() {
         return sslHostConfigs.values().toArray(new SSLHostConfig[0]);
     }
 
     /**
-     * Create the SSLContextfor the the given SSLHostConfig.
-     *
-     * @param sslHostConfig The SSLHostConfig for which the SSLContext should be
-     *                      created
-     * @throws Exception If the SSLContext cannot be created for the given
-     *                   SSLHostConfig
-     */
-    protected abstract void createSSLContext(SSLHostConfig sslHostConfig) throws Exception;
-
-
-    protected void destroySsl() throws Exception {
-        if (isSSLEnabled()) {
-            for (SSLHostConfig sslHostConfig : sslHostConfigs.values()) {
-                releaseSSLContext(sslHostConfig);
-            }
-        }
-    }
-
-
-    /**
-     * Release the SSLContext, if any, associated with the SSLHostConfig.
-     *
-     * @param sslHostConfig The SSLHostConfig for which the SSLContext should be
-     *                      released
-     */
-    protected void releaseSSLContext(SSLHostConfig sslHostConfig) {
-        for (SSLHostConfigCertificate certificate : sslHostConfig.getCertificates(true)) {
-            if (certificate.getSslContext() != null) {
-                SSLContext sslContext = certificate.getSslContext();
-                if (sslContext != null) {
-                    sslContext.destroy();
-                }
-            }
-        }
-    }
-
-
-
-    protected SSLHostConfig getSSLHostConfig(String sniHostName) {
-        SSLHostConfig result = null;
-
-        if (sniHostName != null) {
-            // First choice - direct match
-            result = sslHostConfigs.get(sniHostName);
-            if (result != null) {
-                return result;
-            }
-            // Second choice, wildcard match
-            int indexOfDot = sniHostName.indexOf('.');
-            if (indexOfDot > -1) {
-                result = sslHostConfigs.get("*" + sniHostName.substring(indexOfDot));
-            }
-        }
-
-        // Fall-back. Use the default
-        if (result == null) {
-            result = sslHostConfigs.get(getDefaultSSLHostConfigName());
-        }
-        if (result == null) {
-            // Should never happen.
-            throw new IllegalStateException();
-        }
-        return result;
-    }
-
-
-    /**
      * Has the user requested that send file be used where possible?
      */
-    private boolean useSendfile = true;
+
     public boolean getUseSendfile() {
         return useSendfile;
     }
+
     public void setUseSendfile(boolean useSendfile) {
         this.useSendfile = useSendfile;
     }
-
-
-    /**
-     * Time to wait for the internal executor (if used) to terminate when the
-     * endpoint is stopped in milliseconds. Defaults to 5000 (5 seconds).
-     */
-    private long executorTerminationTimeoutMillis = 5000;
 
     public long getExecutorTerminationTimeoutMillis() {
         return executorTerminationTimeoutMillis;
@@ -419,42 +474,34 @@ public abstract class AbstractEndpoint<S,U> {
 
 
     /**
-     * Acceptor thread count.
-     */
-    protected int acceptorThreadCount = 1;
-
-    /**
      * NO-OP.
      *
      * @param acceptorThreadCount Unused
-     *
      * @deprecated Will be removed in Tomcat 10.
      */
     @Deprecated
-    public void setAcceptorThreadCount(int acceptorThreadCount) {}
+    public void setAcceptorThreadCount(int acceptorThreadCount) {
+    }
 
     /**
      * Always returns 1.
      *
      * @return Always 1.
-     *
      * @deprecated Will be removed in Tomcat 10.
      */
     @Deprecated
-    public int getAcceptorThreadCount() { return 1; }
+    public int getAcceptorThreadCount() {
+        return 1;
+    }
 
-
-    /**
-     * Priority of the acceptor threads.
-     */
-    protected int acceptorThreadPriority = Thread.NORM_PRIORITY;
     public void setAcceptorThreadPriority(int acceptorThreadPriority) {
         this.acceptorThreadPriority = acceptorThreadPriority;
     }
-    public int getAcceptorThreadPriority() { return acceptorThreadPriority; }
 
+    public int getAcceptorThreadPriority() {
+        return acceptorThreadPriority;
+    }
 
-    private int maxConnections = 8*1024;
     public void setMaxConnections(int maxCon) {
         this.maxConnections = maxCon;
         LimitLatch latch = this.connectionLimitLatch;
@@ -469,7 +516,10 @@ public abstract class AbstractEndpoint<S,U> {
             initializeConnectionLatch();
         }
     }
-    public int getMaxConnections() { return this.maxConnections; }
+
+    public int getMaxConnections() {
+        return this.maxConnections;
+    }
 
     /**
      * Return the current count of connections handled by this endpoint, if the
@@ -493,24 +543,21 @@ public abstract class AbstractEndpoint<S,U> {
         return -1;
     }
 
-    /**
-     * External Executor based thread pool.
-     */
-    private Executor executor = null;
+
     public void setExecutor(Executor executor) {
         this.executor = executor;
         this.internalExecutor = (executor == null);
     }
-    public Executor getExecutor() { return executor; }
+
+    public Executor getExecutor() {
+        return executor;
+    }
 
 
-    /**
-     * External Executor based thread pool for utility tasks.
-     */
-    private ScheduledExecutorService utilityExecutor = null;
     public void setUtilityExecutor(ScheduledExecutorService utilityExecutor) {
         this.utilityExecutor = utilityExecutor;
     }
+
     public ScheduledExecutorService getUtilityExecutor() {
         if (utilityExecutor == null) {
             getLog().warn(sm.getString("endpoint.warn.noUtilityExecutor"));
@@ -520,17 +567,20 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
-    /**
-     * Server socket port.
-     */
-    private int port = -1;
-    public int getPort() { return port; }
-    public void setPort(int port ) { this.port=port; }
+    public int getPort() {
+        return port;
+    }
+
+    public void setPort(int port) {
+        this.port = port;
+    }
 
 
-    private int portOffset = 0;
-    public int getPortOffset() { return portOffset; }
-    public void setPortOffset(int portOffset ) {
+    public int getPortOffset() {
+        return portOffset;
+    }
+
+    public void setPortOffset(int portOffset) {
         if (portOffset < 0) {
             throw new IllegalArgumentException(
                     sm.getString("endpoint.portOffset.invalid", Integer.valueOf(portOffset)));
@@ -562,62 +612,40 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
-    /**
-     * Address for the server socket.
-     */
-    private InetAddress address;
-    public InetAddress getAddress() { return address; }
-    public void setAddress(InetAddress address) { this.address = address; }
+    public InetAddress getAddress() {
+        return address;
+    }
 
+    public void setAddress(InetAddress address) {
+        this.address = address;
+    }
 
-    /**
-     * Obtain the network address the server socket is bound to. This primarily
-     * exists to enable the correct address to be used when unlocking the server
-     * socket since it removes the guess-work involved if no address is
-     * specifically set.
-     *
-     * @return The network address that the server socket is listening on or
-     *         null if the server socket is not currently bound.
-     *
-     * @throws IOException If there is a problem determining the currently bound
-     *                     socket
-     */
-    protected abstract InetSocketAddress getLocalAddress() throws IOException;
+    public void setAcceptCount(int acceptCount) {
+        if (acceptCount > 0) this.acceptCount = acceptCount;
+    }
 
+    public int getAcceptCount() {
+        return acceptCount;
+    }
 
-    /**
-     * Allows the server developer to specify the acceptCount (backlog) that
-     * should be used for server sockets. By default, this value
-     * is 100.
-     */
-    private int acceptCount = 100;
-    public void setAcceptCount(int acceptCount) { if (acceptCount > 0) this.acceptCount = acceptCount; }
-    public int getAcceptCount() { return acceptCount; }
+    public boolean getBindOnInit() {
+        return bindOnInit;
+    }
 
-    /**
-     * Controls when the Endpoint binds the port. <code>true</code>, the default
-     * binds the port on {@link #init()} and unbinds it on {@link #destroy()}.
-     * If set to <code>false</code> the port is bound on {@link #start()} and
-     * unbound on {@link #stop()}.
-     */
-    private boolean bindOnInit = true;
-    public boolean getBindOnInit() { return bindOnInit; }
-    public void setBindOnInit(boolean b) { this.bindOnInit = b; }
-    private volatile BindState bindState = BindState.UNBOUND;
+    public void setBindOnInit(boolean b) {
+        this.bindOnInit = b;
+    }
 
-    /**
-     * Keepalive timeout, if not set the soTimeout is used.
-     */
-    private Integer keepAliveTimeout = null;
     public int getKeepAliveTimeout() {
         if (keepAliveTimeout == null) {
             return getConnectionTimeout();
         } else {
-            return keepAliveTimeout.intValue();
+            return keepAliveTimeout;
         }
     }
+
     public void setKeepAliveTimeout(int keepAliveTimeout) {
-        this.keepAliveTimeout = Integer.valueOf(keepAliveTimeout);
+        this.keepAliveTimeout = keepAliveTimeout;
     }
 
 
@@ -625,22 +653,30 @@ public abstract class AbstractEndpoint<S,U> {
      * Socket TCP no delay.
      *
      * @return The current TCP no delay setting for sockets created by this
-     *         endpoint
+     * endpoint
      */
-    public boolean getTcpNoDelay() { return socketProperties.getTcpNoDelay();}
-    public void setTcpNoDelay(boolean tcpNoDelay) { socketProperties.setTcpNoDelay(tcpNoDelay); }
+    public boolean getTcpNoDelay() {
+        return socketProperties.getTcpNoDelay();
+    }
+
+    public void setTcpNoDelay(boolean tcpNoDelay) {
+        socketProperties.setTcpNoDelay(tcpNoDelay);
+    }
 
 
     /**
      * Socket linger.
      *
      * @return The current socket linger time for sockets created by this
-     *         endpoint
+     * endpoint
      */
-    public int getConnectionLinger() { return socketProperties.getSoLingerTime(); }
+    public int getConnectionLinger() {
+        return socketProperties.getSoLingerTime();
+    }
+
     public void setConnectionLinger(int connectionLinger) {
         socketProperties.setSoLingerTime(connectionLinger);
-        socketProperties.setSoLingerOn(connectionLinger>=0);
+        socketProperties.setSoLingerOn(connectionLinger >= 0);
     }
 
 
@@ -649,15 +685,22 @@ public abstract class AbstractEndpoint<S,U> {
      *
      * @return The current socket timeout for sockets created by this endpoint
      */
-    public int getConnectionTimeout() { return socketProperties.getSoTimeout(); }
-    public void setConnectionTimeout(int soTimeout) { socketProperties.setSoTimeout(soTimeout); }
+    public int getConnectionTimeout() {
+        return socketProperties.getSoTimeout();
+    }
 
-    /**
-     * SSL engine.
-     */
-    private boolean SSLEnabled = false;
-    public boolean isSSLEnabled() { return SSLEnabled; }
-    public void setSSLEnabled(boolean SSLEnabled) { this.SSLEnabled = SSLEnabled; }
+    public void setConnectionTimeout(int soTimeout) {
+        socketProperties.setSoTimeout(soTimeout);
+    }
+
+
+    public boolean isSSLEnabled() {
+        return SSLEnabled;
+    }
+
+    public void setSSLEnabled(boolean SSLEnabled) {
+        this.SSLEnabled = SSLEnabled;
+    }
 
     /**
      * Identifies if the endpoint supports ALPN. Note that a return value of
@@ -665,11 +708,11 @@ public abstract class AbstractEndpoint<S,U> {
      * <code>true</code>.
      *
      * @return <code>true</code> if the endpoint supports ALPN in its current
-     *         configuration, otherwise <code>false</code>.
+     * configuration, otherwise <code>false</code>.
      */
     public abstract boolean isAlpnSupported();
 
-    private int minSpareThreads = 10;
+
     public void setMinSpareThreads(int minSpareThreads) {
         this.minSpareThreads = minSpareThreads;
         Executor executor = this.executor;
@@ -681,22 +724,11 @@ public abstract class AbstractEndpoint<S,U> {
             ((java.util.concurrent.ThreadPoolExecutor) executor).setCorePoolSize(minSpareThreads);
         }
     }
+
     public int getMinSpareThreads() {
         return Math.min(getMinSpareThreadsInternal(), getMaxThreads());
     }
-    private int getMinSpareThreadsInternal() {
-        if (internalExecutor) {
-            return minSpareThreads;
-        } else {
-            return -1;
-        }
-    }
 
-
-    /**
-     * Maximum amount of worker threads.
-     */
-    private int maxThreads = 200;
     public void setMaxThreads(int maxThreads) {
         this.maxThreads = maxThreads;
         Executor executor = this.executor;
@@ -708,6 +740,7 @@ public abstract class AbstractEndpoint<S,U> {
             ((java.util.concurrent.ThreadPoolExecutor) executor).setMaximumPoolSize(maxThreads);
         }
     }
+
     public int getMaxThreads() {
         if (internalExecutor) {
             return maxThreads;
@@ -716,15 +749,11 @@ public abstract class AbstractEndpoint<S,U> {
         }
     }
 
-
-    /**
-     * Priority of the worker threads.
-     */
-    protected int threadPriority = Thread.NORM_PRIORITY;
     public void setThreadPriority(int threadPriority) {
         // Can't change this once the executor has started
         this.threadPriority = threadPriority;
     }
+
     public int getThreadPriority() {
         if (internalExecutor) {
             return threadPriority;
@@ -734,78 +763,67 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
-    /**
-     * Max keep alive requests
-     */
-    private int maxKeepAliveRequests=100; // as in Apache HTTPD server
     public int getMaxKeepAliveRequests() {
         return maxKeepAliveRequests;
     }
+
     public void setMaxKeepAliveRequests(int maxKeepAliveRequests) {
         this.maxKeepAliveRequests = maxKeepAliveRequests;
     }
 
 
-    /**
-     * Name of the thread pool, which will be used for naming child threads.
-     */
-    private String name = "TP";
-    public void setName(String name) { this.name = name; }
-    public String getName() { return name; }
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
 
 
-    /**
-     * Name of domain to use for JMX registration.
-     */
-    private String domain;
-    public void setDomain(String domain) { this.domain = domain; }
-    public String getDomain() { return domain; }
+    public void setDomain(String domain) {
+        this.domain = domain;
+    }
+
+    public String getDomain() {
+        return domain;
+    }
 
 
-    /**
-     * The default is true - the created threads will be
-     *  in daemon mode. If set to false, the control thread
-     *  will not be daemon - and will keep the process alive.
-     */
-    private boolean daemon = true;
-    public void setDaemon(boolean b) { daemon = b; }
-    public boolean getDaemon() { return daemon; }
+    public void setDaemon(boolean b) {
+        daemon = b;
+    }
+
+    public boolean getDaemon() {
+        return daemon;
+    }
 
 
-    /**
-     * Expose asynchronous IO capability.
-     */
-    private boolean useAsyncIO = true;
-    public void setUseAsyncIO(boolean useAsyncIO) { this.useAsyncIO = useAsyncIO; }
-    public boolean getUseAsyncIO() { return useAsyncIO; }
+    public void setUseAsyncIO(boolean useAsyncIO) {
+        this.useAsyncIO = useAsyncIO;
+    }
 
+    public boolean getUseAsyncIO() {
+        return useAsyncIO;
+    }
 
-    protected abstract boolean getDeferAccept();
-
-
-    protected final List<String> negotiableProtocols = new ArrayList<>();
     public void addNegotiatedProtocol(String negotiableProtocol) {
         negotiableProtocols.add(negotiableProtocol);
     }
+
     public boolean hasNegotiableProtocols() {
         return (negotiableProtocols.size() > 0);
     }
 
 
-    /**
-     * Handling of accepted sockets.
-     */
-    private Handler<S> handler = null;
-    public void setHandler(Handler<S> handler ) { this.handler = handler; }
-    public Handler<S> getHandler() { return handler; }
+    public void setHandler(Handler<S> handler) {
+        this.handler = handler;
+    }
 
+    public Handler<S> getHandler() {
+        return handler;
+    }
 
-    /**
-     * Attributes provide a way for configuration to be passed to sub-components
-     * without the {@link org.apache.coyote.ProtocolHandler} being aware of the
-     * properties available on those sub-components.
-     */
-    protected HashMap<String, Object> attributes = new HashMap<>();
 
     /**
      * Generic property setter called when a property for which a specific
@@ -823,12 +841,12 @@ public abstract class AbstractEndpoint<S,U> {
         }
         attributes.put(name, value);
     }
+
     /**
      * Used by sub-components to retrieve configuration information.
      *
      * @param key The name of the property for which the value should be
      *            retrieved
-     *
      * @return The value of the specified property
      */
     public Object getAttribute(String key) {
@@ -840,7 +858,6 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
-
     public boolean setProperty(String name, String value) {
         setAttribute(name, value);
         final String socketName = "socket.";
@@ -848,13 +865,14 @@ public abstract class AbstractEndpoint<S,U> {
             if (name.startsWith(socketName)) {
                 return IntrospectionUtils.setProperty(socketProperties, name.substring(socketName.length()), value);
             } else {
-                return IntrospectionUtils.setProperty(this,name,value,false);
+                return IntrospectionUtils.setProperty(this, name, value, false);
             }
-        }catch ( Exception x ) {
+        } catch (Exception x) {
             getLog().error(sm.getString("endpoint.setAttributeError", name, value), x);
             return false;
         }
     }
+
     public String getProperty(String name) {
         String value = (String) getAttribute(name);
         final String socketName = "socket.";
@@ -920,8 +938,8 @@ public abstract class AbstractEndpoint<S,U> {
         internalExecutor = true;
         TaskQueue taskqueue = new TaskQueue();
         TaskThreadFactory tf = new TaskThreadFactory(getName() + "-exec-", daemon, getThreadPriority());
-        executor = new ThreadPoolExecutor(getMinSpareThreads(), getMaxThreads(), 60, TimeUnit.SECONDS,taskqueue, tf);
-        taskqueue.setParent( (ThreadPoolExecutor) executor);
+        executor = new ThreadPoolExecutor(getMinSpareThreads(), getMaxThreads(), 60, TimeUnit.SECONDS, taskqueue, tf);
+        taskqueue.setParent((ThreadPoolExecutor) executor);
     }
 
     public void shutdownExecutor() {
@@ -946,6 +964,227 @@ public abstract class AbstractEndpoint<S,U> {
                 TaskQueue queue = (TaskQueue) tpe.getQueue();
                 queue.setParent(null);
             }
+        }
+    }
+
+    /**
+     * Close the server socket (to prevent further connections) if the server
+     * socket was originally bound on {@link #start()} (rather than on
+     * {@link #init()}).
+     *
+     * @see #getBindOnInit()
+     */
+    public final void closeServerSocketGraceful() {
+        if (bindState == BindState.BOUND_ON_START) {
+            bindState = BindState.SOCKET_CLOSED_ON_STOP;
+            try {
+                doCloseServerSocket();
+            } catch (IOException ioe) {
+                getLog().warn(sm.getString("endpoint.serverSocket.closeFailed", getName()), ioe);
+            }
+        }
+    }
+
+
+    // ---------------------------------------------- Request processing methods
+
+    /**
+     * Process the given SocketWrapper with the given status. Used to trigger
+     * processing as if the Poller (for those endpoints that have one)
+     * selected the socket.
+     *
+     * @param socketWrapper The socket wrapper to process
+     * @param event         The socket event to be processed
+     * @param dispatch      Should the processing be performed on a new
+     *                      container thread
+     * @return if processing was triggered successfully
+     */
+    public boolean processSocket(SocketWrapperBase<S> socketWrapper, SocketEvent event, boolean dispatch) {
+        try {
+            if (socketWrapper == null) {
+                return false;
+            }
+            // SocketProcessor复用, 先从缓存取出来实例, 如果为空, 就创建一个新的. 如果不为空, 则重置它
+            SocketProcessorBase<S> sc = null;
+            if (processorCache != null) {
+                sc = processorCache.pop();
+            }
+            if (sc == null) {
+                sc = createSocketProcessor(socketWrapper, event);
+            } else {
+                sc.reset(socketWrapper, event);
+            }
+            // 获取当前EndPoint的I/O线程池, 它是处理Socket的工作线程. 这边逻辑要转到SocketProcessor#doRun()中去
+            Executor executor = getExecutor();
+            if (dispatch && executor != null) {
+                executor.execute(sc);
+            } else {
+                // 没配置线程池, 就直接运行
+                sc.run();
+            }
+        } catch (RejectedExecutionException ree) {
+            getLog().warn(sm.getString("endpoint.executor.fail", socketWrapper), ree);
+            return false;
+        } catch (Throwable t) {
+            ExceptionUtils.handleThrowable(t);
+            // This means we got an OOM or similar creating a thread, or that
+            // the pool and its queue are full
+            getLog().error(sm.getString("endpoint.process.fail"), t);
+            return false;
+        }
+        return true;
+    }
+
+    // ------------------------------------------------------- Lifecycle methods
+
+    /*
+     * NOTE: There is no maintenance of state or checking for valid transitions
+     * within this class other than ensuring that bind/unbind are called in the
+     * right place. It is expected that the calling code will maintain state and
+     * prevent invalid state transitions.
+     */
+
+    public abstract void bind() throws Exception;
+
+    public abstract void unbind() throws Exception;
+
+    public abstract void startInternal() throws Exception;
+
+    public abstract void stopInternal() throws Exception;
+
+    public final void init() throws Exception {
+        // 默认为true, 一旦初始化就开始绑定端口
+        if (bindOnInit) {
+            // 绑定Endpoint底层的ServerSocket
+            bindWithCleanup();
+            bindState = BindState.BOUND_ON_INIT;
+        }
+        if (this.domain != null) {
+            // Register endpoint (as ThreadPool - historical name)
+            oname = new ObjectName(domain + ":type=ThreadPool,name=\"" + getName() + "\"");
+            Registry.getRegistry(null, null).registerComponent(this, oname, null);
+
+            ObjectName socketPropertiesOname = new ObjectName(domain +
+                    ":type=SocketProperties,name=\"" + getName() + "\"");
+            socketProperties.setObjectName(socketPropertiesOname);
+            Registry.getRegistry(null, null).registerComponent(socketProperties, socketPropertiesOname, null);
+
+            for (SSLHostConfig sslHostConfig : findSslHostConfigs()) {
+                registerJmx(sslHostConfig);
+            }
+        }
+    }
+
+    public final void start() throws Exception {
+        if (bindState == BindState.UNBOUND) {
+            bindWithCleanup();
+            bindState = BindState.BOUND_ON_START;
+        }
+        startInternal();
+    }
+
+    /**
+     * Pause the endpoint, which will stop it accepting new connections and
+     * unlock the acceptor.
+     */
+    public void pause() {
+        if (running && !paused) {
+            paused = true;
+            releaseConnectionLatch();
+            unlockAccept();
+            getHandler().pause();
+        }
+    }
+
+    /**
+     * Resume the endpoint, which will make it start accepting new connections
+     * again.
+     */
+    public void resume() {
+        if (running) {
+            paused = false;
+        }
+    }
+
+    public final void stop() throws Exception {
+        stopInternal();
+        if (bindState == BindState.BOUND_ON_START || bindState == BindState.SOCKET_CLOSED_ON_STOP) {
+            unbind();
+            bindState = BindState.UNBOUND;
+        }
+    }
+
+    public final void destroy() throws Exception {
+        if (bindState == BindState.BOUND_ON_INIT) {
+            unbind();
+            bindState = BindState.UNBOUND;
+        }
+        Registry registry = Registry.getRegistry(null, null);
+        registry.unregisterComponent(oname);
+        registry.unregisterComponent(socketProperties.getObjectName());
+        for (SSLHostConfig sslHostConfig : findSslHostConfigs()) {
+            unregisterJmx(sslHostConfig);
+        }
+    }
+
+    private void registerJmx(SSLHostConfig sslHostConfig) {
+        if (domain == null) {
+            // Before init the domain is null
+            return;
+        }
+        ObjectName sslOname = null;
+        try {
+            sslOname = new ObjectName(domain + ":type=SSLHostConfig,ThreadPool=\"" +
+                    getName() + "\",name=" + ObjectName.quote(sslHostConfig.getHostName()));
+            sslHostConfig.setObjectName(sslOname);
+            try {
+                Registry.getRegistry(null, null).registerComponent(sslHostConfig, sslOname, null);
+            } catch (Exception e) {
+                getLog().warn(sm.getString("endpoint.jmxRegistrationFailed", sslOname), e);
+            }
+        } catch (MalformedObjectNameException e) {
+            getLog().warn(sm.getString("endpoint.invalidJmxNameSslHost",
+                    sslHostConfig.getHostName()), e);
+        }
+
+        for (SSLHostConfigCertificate sslHostConfigCert : sslHostConfig.getCertificates()) {
+            ObjectName sslCertOname = null;
+            try {
+                sslCertOname = new ObjectName(domain +
+                        ":type=SSLHostConfigCertificate,ThreadPool=\"" + getName() +
+                        "\",Host=" + ObjectName.quote(sslHostConfig.getHostName()) +
+                        ",name=" + sslHostConfigCert.getType());
+                sslHostConfigCert.setObjectName(sslCertOname);
+                try {
+                    Registry.getRegistry(null, null).registerComponent(
+                            sslHostConfigCert, sslCertOname, null);
+                } catch (Exception e) {
+                    getLog().warn(sm.getString("endpoint.jmxRegistrationFailed", sslCertOname), e);
+                }
+            } catch (MalformedObjectNameException e) {
+                getLog().warn(sm.getString("endpoint.invalidJmxNameSslHostCert",
+                        sslHostConfig.getHostName(), sslHostConfigCert.getType()), e);
+            }
+        }
+    }
+
+    private void unregisterJmx(SSLHostConfig sslHostConfig) {
+        Registry registry = Registry.getRegistry(null, null);
+        registry.unregisterComponent(sslHostConfig.getObjectName());
+        for (SSLHostConfigCertificate sslHostConfigCert : sslHostConfig.getCertificates()) {
+            registry.unregisterComponent(sslHostConfigCert.getObjectName());
+        }
+    }
+
+    private void bindWithCleanup() throws Exception {
+        try {
+            bind();
+        } catch (Throwable t) {
+            // Ensure open sockets etc. are cleaned up if something goes
+            // wrong during bind
+            ExceptionUtils.handleThrowable(t);
+            unbind();
+            throw t;
         }
     }
 
@@ -981,11 +1220,11 @@ public abstract class AbstractEndpoint<S,U> {
                 if (getSocketProperties().getUnlockTimeout() > utmo)
                     utmo = getSocketProperties().getUnlockTimeout();
                 s.setSoTimeout(stmo);
-                s.setSoLinger(getSocketProperties().getSoLingerOn(),getSocketProperties().getSoLingerTime());
+                s.setSoLinger(getSocketProperties().getSoLingerOn(), getSocketProperties().getSoLingerTime());
                 if (getLog().isDebugEnabled()) {
                     getLog().debug("About to unlock socket for:" + unlockAddress);
                 }
-                s.connect(unlockAddress,utmo);
+                s.connect(unlockAddress, utmo);
                 if (getDeferAccept()) {
                     /*
                      * In the case of a deferred accept / accept filters we need to
@@ -1010,7 +1249,7 @@ public abstract class AbstractEndpoint<S,U> {
                 Thread.sleep(5);
                 waitLeft -= 5;
             }
-        } catch(Throwable t) {
+        } catch (Throwable t) {
             ExceptionUtils.handleThrowable(t);
             if (getLog().isDebugEnabled()) {
                 getLog().debug(sm.getString(
@@ -1018,7 +1257,6 @@ public abstract class AbstractEndpoint<S,U> {
             }
         }
     }
-
 
     private static InetSocketAddress getUnlockAddress(InetSocketAddress localAddress) throws SocketException {
         if (localAddress.getAddress().isAnyLocalAddress()) {
@@ -1066,174 +1304,18 @@ public abstract class AbstractEndpoint<S,U> {
         }
     }
 
-
-    // ---------------------------------------------- Request processing methods
-
-    /**
-     * Process the given SocketWrapper with the given status. Used to trigger
-     * processing as if the Poller (for those endpoints that have one)
-     * selected the socket.
-     *
-     * @param socketWrapper The socket wrapper to process
-     * @param event         The socket event to be processed
-     * @param dispatch      Should the processing be performed on a new
-     *                          container thread
-     *
-     * @return if processing was triggered successfully
-     */
-    public boolean processSocket(SocketWrapperBase<S> socketWrapper,
-            SocketEvent event, boolean dispatch) {
-        try {
-            if (socketWrapper == null) {
-                return false;
-            }
-            // SocketProcessor复用, 先从缓存取出来实例, 如果为空, 就创建一个新的;
-            // 如果不为空, 则重置它
-            SocketProcessorBase<S> sc = null;
-            if (processorCache != null) {
-                sc = processorCache.pop();
-            }
-            if (sc == null) {
-                sc = createSocketProcessor(socketWrapper, event);
-            } else {
-                sc.reset(socketWrapper, event);
-            }
-            // 获取当前EndPoint的I/O线程池, 它是处理Socket的工作线程.
-            // 这边逻辑要转到SocketProcessor#doRun()中去
-            Executor executor = getExecutor();
-            if (dispatch && executor != null) {
-                executor.execute(sc);
-            } else {
-                // 没配置线程池, 就直接运行
-                sc.run();
-            }
-        } catch (RejectedExecutionException ree) {
-            getLog().warn(sm.getString("endpoint.executor.fail", socketWrapper) , ree);
-            return false;
-        } catch (Throwable t) {
-            ExceptionUtils.handleThrowable(t);
-            // This means we got an OOM or similar creating a thread, or that
-            // the pool and its queue are full
-            getLog().error(sm.getString("endpoint.process.fail"), t);
-            return false;
-        }
-        return true;
+    private void releaseConnectionLatch() {
+        LimitLatch latch = connectionLimitLatch;
+        if (latch != null) latch.releaseAll();
+        connectionLimitLatch = null;
     }
 
-
-    protected abstract SocketProcessorBase<S> createSocketProcessor(
-            SocketWrapperBase<S> socketWrapper, SocketEvent event);
-
-
-    // ------------------------------------------------------- Lifecycle methods
-
-    /*
-     * NOTE: There is no maintenance of state or checking for valid transitions
-     * within this class other than ensuring that bind/unbind are called in the
-     * right place. It is expected that the calling code will maintain state and
-     * prevent invalid state transitions.
-     */
-
-    public abstract void bind() throws Exception;
-    public abstract void unbind() throws Exception;
-    public abstract void startInternal() throws Exception;
-    public abstract void stopInternal() throws Exception;
-
-
-    private void bindWithCleanup() throws Exception {
-        try {
-            bind();
-        } catch (Throwable t) {
-            // Ensure open sockets etc. are cleaned up if something goes
-            // wrong during bind
-            ExceptionUtils.handleThrowable(t);
-            unbind();
-            throw t;
+    private int getMinSpareThreadsInternal() {
+        if (internalExecutor) {
+            return minSpareThreads;
+        } else {
+            return -1;
         }
-    }
-
-
-    public final void init() throws Exception {
-        // 默认为true, 一旦初始化就开始绑定端口
-        if (bindOnInit) {
-            // 绑定Endpoint底层的ServerSocket
-            bindWithCleanup();
-            bindState = BindState.BOUND_ON_INIT;
-        }
-        if (this.domain != null) {
-            // Register endpoint (as ThreadPool - historical name)
-            oname = new ObjectName(domain + ":type=ThreadPool,name=\"" + getName() + "\"");
-            Registry.getRegistry(null, null).registerComponent(this, oname, null);
-
-            ObjectName socketPropertiesOname = new ObjectName(domain +
-                    ":type=SocketProperties,name=\"" + getName() + "\"");
-            socketProperties.setObjectName(socketPropertiesOname);
-            Registry.getRegistry(null, null).registerComponent(socketProperties, socketPropertiesOname, null);
-
-            for (SSLHostConfig sslHostConfig : findSslHostConfigs()) {
-                registerJmx(sslHostConfig);
-            }
-        }
-    }
-
-
-    private void registerJmx(SSLHostConfig sslHostConfig) {
-        if (domain == null) {
-            // Before init the domain is null
-            return;
-        }
-        ObjectName sslOname = null;
-        try {
-            sslOname = new ObjectName(domain + ":type=SSLHostConfig,ThreadPool=\"" +
-                    getName() + "\",name=" + ObjectName.quote(sslHostConfig.getHostName()));
-            sslHostConfig.setObjectName(sslOname);
-            try {
-                Registry.getRegistry(null, null).registerComponent(sslHostConfig, sslOname, null);
-            } catch (Exception e) {
-                getLog().warn(sm.getString("endpoint.jmxRegistrationFailed", sslOname), e);
-            }
-        } catch (MalformedObjectNameException e) {
-            getLog().warn(sm.getString("endpoint.invalidJmxNameSslHost",
-                    sslHostConfig.getHostName()), e);
-        }
-
-        for (SSLHostConfigCertificate sslHostConfigCert : sslHostConfig.getCertificates()) {
-            ObjectName sslCertOname = null;
-            try {
-                sslCertOname = new ObjectName(domain +
-                        ":type=SSLHostConfigCertificate,ThreadPool=\"" + getName() +
-                        "\",Host=" + ObjectName.quote(sslHostConfig.getHostName()) +
-                        ",name=" + sslHostConfigCert.getType());
-                sslHostConfigCert.setObjectName(sslCertOname);
-                try {
-                    Registry.getRegistry(null, null).registerComponent(
-                            sslHostConfigCert, sslCertOname, null);
-                } catch (Exception e) {
-                    getLog().warn(sm.getString("endpoint.jmxRegistrationFailed", sslCertOname), e);
-                }
-            } catch (MalformedObjectNameException e) {
-                getLog().warn(sm.getString("endpoint.invalidJmxNameSslHostCert",
-                        sslHostConfig.getHostName(), sslHostConfigCert.getType()), e);
-            }
-        }
-    }
-
-
-    private void unregisterJmx(SSLHostConfig sslHostConfig) {
-        Registry registry = Registry.getRegistry(null, null);
-        registry.unregisterComponent(sslHostConfig.getObjectName());
-        for (SSLHostConfigCertificate sslHostConfigCert : sslHostConfig.getCertificates()) {
-            registry.unregisterComponent(sslHostConfigCert.getObjectName());
-        }
-    }
-
-
-    public final void start() throws Exception {
-        if (bindState == BindState.UNBOUND) {
-            bindWithCleanup();
-            bindState = BindState.BOUND_ON_START;
-        }
-        startInternal();
     }
 
     /**
@@ -1249,105 +1331,127 @@ public abstract class AbstractEndpoint<S,U> {
         t.start();
     }
 
-
-    /**
-     * Pause the endpoint, which will stop it accepting new connections and
-     * unlock the acceptor.
-     */
-    public void pause() {
-        if (running && !paused) {
-            paused = true;
-            releaseConnectionLatch();
-            unlockAccept();
-            getHandler().pause();
-        }
-    }
-
-    /**
-     * Resume the endpoint, which will make it start accepting new connections
-     * again.
-     */
-    public void resume() {
-        if (running) {
-            paused = false;
-        }
-    }
-
-    public final void stop() throws Exception {
-        stopInternal();
-        if (bindState == BindState.BOUND_ON_START || bindState == BindState.SOCKET_CLOSED_ON_STOP) {
-            unbind();
-            bindState = BindState.UNBOUND;
-        }
-    }
-
-    public final void destroy() throws Exception {
-        if (bindState == BindState.BOUND_ON_INIT) {
-            unbind();
-            bindState = BindState.UNBOUND;
-        }
-        Registry registry = Registry.getRegistry(null, null);
-        registry.unregisterComponent(oname);
-        registry.unregisterComponent(socketProperties.getObjectName());
-        for (SSLHostConfig sslHostConfig : findSslHostConfigs()) {
-            unregisterJmx(sslHostConfig);
-        }
-    }
-
-
-    protected abstract Log getLog();
-
     protected LimitLatch initializeConnectionLatch() {
-        if (maxConnections==-1) return null;
-        if (connectionLimitLatch==null) {
+        if (maxConnections == -1) return null;
+        if (connectionLimitLatch == null) {
             connectionLimitLatch = new LimitLatch(getMaxConnections());
         }
         return connectionLimitLatch;
     }
 
-    private void releaseConnectionLatch() {
-        LimitLatch latch = connectionLimitLatch;
-        if (latch!=null) latch.releaseAll();
-        connectionLimitLatch = null;
-    }
-
     protected void countUpOrAwaitConnection() throws InterruptedException {
-        if (maxConnections==-1) return;
+        if (maxConnections == -1) {
+            // 配置为-1, 表示没有不限制客户端连接数
+            return;
+        }
         LimitLatch latch = connectionLimitLatch;
-        if (latch!=null) latch.countUpOrAwait();
+        if (latch != null) {
+            // 连接数加一, 如果达到最大值, 会被阻塞等待
+            latch.countUpOrAwait();
+        }
     }
 
     protected long countDownConnection() {
-        if (maxConnections==-1) return -1;
+        if (maxConnections == -1) return -1;
         LimitLatch latch = connectionLimitLatch;
-        if (latch!=null) {
+        if (latch != null) {
             long result = latch.countDown();
-            if (result<0) {
+            if (result < 0) {
                 getLog().warn(sm.getString("endpoint.warn.incorrectConnectionCount"));
             }
             return result;
         } else return -1;
     }
 
-
     /**
-     * Close the server socket (to prevent further connections) if the server
-     * socket was originally bound on {@link #start()} (rather than on
-     * {@link #init()}).
+     * Close the socket when the connection has to be immediately closed when
+     * an error occurs while configuring the accepted socket or trying to
+     * dispatch it for processing. The wrapper associated with the socket will
+     * be used for the close.
      *
-     * @see #getBindOnInit()
+     * @param socket The newly accepted socket
      */
-    public final void closeServerSocketGraceful() {
-        if (bindState == BindState.BOUND_ON_START) {
-            bindState = BindState.SOCKET_CLOSED_ON_STOP;
-            try {
-                doCloseServerSocket();
-            } catch (IOException ioe) {
-                getLog().warn(sm.getString("endpoint.serverSocket.closeFailed", getName()), ioe);
+    protected void closeSocket(U socket) {
+        SocketWrapperBase<S> socketWrapper = connections.get(socket);
+        if (socketWrapper != null) {
+            socketWrapper.close();
+        }
+    }
+
+    protected void destroySsl() throws Exception {
+        if (isSSLEnabled()) {
+            for (SSLHostConfig sslHostConfig : sslHostConfigs.values()) {
+                releaseSSLContext(sslHostConfig);
             }
         }
     }
 
+    /**
+     * Release the SSLContext, if any, associated with the SSLHostConfig.
+     *
+     * @param sslHostConfig The SSLHostConfig for which the SSLContext should be released
+     */
+    protected void releaseSSLContext(SSLHostConfig sslHostConfig) {
+        for (SSLHostConfigCertificate certificate : sslHostConfig.getCertificates(true)) {
+            if (certificate.getSslContext() != null) {
+                SSLContext sslContext = certificate.getSslContext();
+                if (sslContext != null) {
+                    sslContext.destroy();
+                }
+            }
+        }
+    }
+
+    protected SSLHostConfig getSSLHostConfig(String sniHostName) {
+        SSLHostConfig result = null;
+        if (sniHostName != null) {
+            // First choice - direct match
+            result = sslHostConfigs.get(sniHostName);
+            if (result != null) {
+                return result;
+            }
+            // Second choice, wildcard match
+            int indexOfDot = sniHostName.indexOf('.');
+            if (indexOfDot > -1) {
+                result = sslHostConfigs.get("*" + sniHostName.substring(indexOfDot));
+            }
+        }
+        // Fall-back. Use the default
+        if (result == null) {
+            result = sslHostConfigs.get(getDefaultSSLHostConfigName());
+        }
+        if (result == null) {
+            // Should never happen.
+            throw new IllegalStateException();
+        }
+        return result;
+    }
+
+    protected abstract boolean getDeferAccept();
+
+    protected abstract Log getLog();
+
+    protected abstract SocketProcessorBase<S> createSocketProcessor(SocketWrapperBase<S> socketWrapper, SocketEvent event);
+
+    /**
+     * Obtain the network address the server socket is bound to. This primarily
+     * exists to enable the correct address to be used when unlocking the server
+     * socket since it removes the guess-work involved if no address is
+     * specifically set.
+     *
+     * @return The network address that the server socket is listening on or
+     * null if the server socket is not currently bound.
+     * @throws IOException If there is a problem determining the currently bound socket
+     */
+    protected abstract InetSocketAddress getLocalAddress() throws IOException;
+
+    /**
+     * Create the SSLContextfor the the given SSLHostConfig.
+     *
+     * @param sslHostConfig The SSLHostConfig for which the SSLContext should be created
+     * @throws Exception If the SSLContext cannot be created for the given SSLHostConfig
+     */
+    protected abstract void createSSLContext(SSLHostConfig sslHostConfig) throws Exception;
 
     /**
      * Actually close the server socket but don't perform any other clean-up.
@@ -1361,23 +1465,9 @@ public abstract class AbstractEndpoint<S,U> {
     protected abstract boolean setSocketOptions(U socket);
 
     /**
-     * Close the socket when the connection has to be immediately closed when
-     * an error occurs while configuring the accepted socket or trying to
-     * dispatch it for processing. The wrapper associated with the socket will
-     * be used for the close.
-     * @param socket The newly accepted socket
-     */
-    protected void closeSocket(U socket) {
-        SocketWrapperBase<S> socketWrapper = connections.get(socket);
-        if (socketWrapper != null) {
-            socketWrapper.close();
-        }
-    }
-
-    /**
-     * Close the socket. This is used when the connector is not in a state
-     * which allows processing the socket, or if there was an error which
-     * prevented the allocation of the socket wrapper.
+     * Close the socket. This is used when the connector is not in a state which allows processing the socket,
+     * or if there was an error which prevented the allocation of the socket wrapper.
+     *
      * @param socket The newly accepted socket
      */
     protected abstract void destroySocket(U socket);

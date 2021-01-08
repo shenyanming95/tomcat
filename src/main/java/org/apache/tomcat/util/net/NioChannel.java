@@ -28,20 +28,29 @@ import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 
 /**
- * Base class for a SocketChannel wrapper used by the endpoint.
- * This way, logic for an SSL socket channel remains the same as for
- * a non SSL, making sure we don't need to code for any exception cases.
+ * endpoint使用的SocketChannel包装器的基类.
+ * 这样设计就可以让SSL套接字通道的逻辑与非SSL通道的逻辑相同, 从而确保我们无需为任何异常情况编写代码
  *
  * @version 1.0
  */
 public class NioChannel implements ByteChannel, ScatteringByteChannel, GatheringByteChannel {
 
     protected static final StringManager sm = StringManager.getManager(NioChannel.class);
-
     protected static final ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
+    /**
+     * 操作{@link ByteBuffer}处理器
+     */
     protected final SocketBufferHandler bufHandler;
+
+    /**
+     * nio底层的channel, 被NioChannel包裹
+     */
     protected SocketChannel sc = null;
+
+    /**
+     * 包裹{@link java.net.Socket}的对象
+     */
     protected NioSocketWrapper socketWrapper = null;
 
     public NioChannel(SocketBufferHandler bufHandler) {
@@ -51,7 +60,7 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
     /**
      * Reset the channel
      *
-     * @param channel the socket channel
+     * @param channel       the socket channel
      * @param socketWrapper the socket wrapper
      * @throws IOException If a problem was encountered resetting the channel
      */
@@ -78,16 +87,13 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
     /**
      * Returns true if the network buffer has been flushed out and is empty.
      *
-     * @param block     Unused. May be used when overridden
-     * @param s         Unused. May be used when overridden
-     * @param timeout   Unused. May be used when overridden
-     * @return Always returns <code>true</code> since there is no network buffer
-     *         in the regular channel
-     *
+     * @param block   Unused. May be used when overridden
+     * @param s       Unused. May be used when overridden
+     * @param timeout Unused. May be used when overridden
+     * @return Always returns <code>true</code> since there is no network buffer in the regular channel
      * @throws IOException Never for non-secure channel
      */
-    public boolean flush(boolean block, Selector s, long timeout)
-            throws IOException {
+    public boolean flush(boolean block, Selector s, long timeout) throws IOException {
         return true;
     }
 
@@ -106,7 +112,6 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
      * Close the connection.
      *
      * @param force Should the underlying socket be forcibly closed?
-     *
      * @throws IOException If closing the secure channel fails.
      */
     public void close(boolean force) throws IOException {
@@ -144,8 +149,7 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
     }
 
     @Override
-    public long write(ByteBuffer[] srcs, int offset, int length)
-            throws IOException {
+    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
         checkInterruptStatus();
         return sc.write(srcs, offset, length);
     }
@@ -155,7 +159,7 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
      *
      * @param dst The buffer into which bytes are to be transferred
      * @return The number of bytes read, possibly zero, or <code>-1</code> if
-     *         the channel has reached end-of-stream
+     * the channel has reached end-of-stream
      * @throws IOException If some other I/O error occurs
      */
     @Override
@@ -216,7 +220,6 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
      * Return true if the buffer wrote data. NO-OP for non-secure channel.
      *
      * @return Always returns {@code false} for non-secure channel
-     *
      * @throws IOException Never for non-secure channel
      */
     public boolean flushOutbound() throws IOException {
@@ -226,12 +229,13 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
     /**
      * This method should be used to check the interrupt status before
      * attempting a write.
-     *
+     * <p>
      * If a thread has been interrupted and the interrupt has not been cleared
      * then an attempt to write to the socket will fail. When this happens the
      * socket is removed from the poller without the socket being selected. This
      * results in a connection limit leak for NIO as the endpoint expects the
      * socket to be selected even in error conditions.
+     *
      * @throws IOException If the current thread was interrupted
      */
     protected void checkInterruptStatus() throws IOException {
@@ -241,9 +245,11 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
     }
 
     private ApplicationBufferHandler appReadBufHandler;
+
     public void setAppReadBufHandler(ApplicationBufferHandler handler) {
         this.appReadBufHandler = handler;
     }
+
     protected ApplicationBufferHandler getAppReadBufHandler() {
         return appReadBufHandler;
     }
@@ -252,38 +258,47 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
         @Override
         public void close() throws IOException {
         }
+
         @Override
         public boolean isOpen() {
             return false;
         }
+
         @Override
         public void reset(SocketChannel channel, NioSocketWrapper socketWrapper) throws IOException {
         }
+
         @Override
         public void free() {
         }
+
         @Override
         public void setAppReadBufHandler(ApplicationBufferHandler handler) {
         }
+
         @Override
         public int read(ByteBuffer dst) throws IOException {
             return -1;
         }
+
         @Override
         public long read(ByteBuffer[] dsts, int offset, int length)
                 throws IOException {
             return -1L;
         }
+
         @Override
         public int write(ByteBuffer src) throws IOException {
             checkInterruptStatus();
             return -1;
         }
+
         @Override
         public long write(ByteBuffer[] srcs, int offset, int length)
                 throws IOException {
             return -1L;
         }
+
         @Override
         public String toString() {
             return "Closed NioChannel";

@@ -31,9 +31,11 @@ import org.apache.tomcat.util.res.StringManager;
 public class Acceptor<U> implements Runnable {
 
     private static final Log log = LogFactory.getLog(Acceptor.class);
+
     private static final StringManager sm = StringManager.getManager(Acceptor.class);
 
     private static final int INITIAL_ERROR_DELAY = 50;
+
     private static final int MAX_ERROR_DELAY = 1600;
 
     /**
@@ -42,13 +44,16 @@ public class Acceptor<U> implements Runnable {
      * 但是, 每个I/O模型接收请求的方式不一样, 所以Tomcat将Endpoint引起来, 同时提供一个获取Socket的方法, 让Acceptor调用.
      * 这就是组合的魅力！
      */
-    private final AbstractEndpoint<?,U> endpoint;
-
+    private final AbstractEndpoint<?, U> endpoint;
 
     private String threadName;
+
+    /**
+     * Acceptor运行状态, 受到 Endpoint 影响
+     */
     protected volatile AcceptorState state = AcceptorState.NEW;
 
-    public Acceptor(AbstractEndpoint<?,U> endpoint) {
+    public Acceptor(AbstractEndpoint<?, U> endpoint) {
         this.endpoint = endpoint;
     }
 
@@ -70,8 +75,7 @@ public class Acceptor<U> implements Runnable {
         int errorDelay = 0;
         // Acceptor会一直在这里循环, 直到 Endpoint 被关闭.
         while (endpoint.isRunning()) {
-
-            // 内层循环, endpoint处于运行, 并且处于暂停中, 为了避免一直死循环下去, 这边会进行一个小睡眠.
+            // 内层循环：如果endpoint处于运行状态, 但是被暂停了, 为了避免一直死循环下去, 这边会进行一个小睡眠.
             // 其实自己在设计服务端程序时, 可以借鉴这样的做法.
             while (endpoint.isPaused() && endpoint.isRunning()) {
                 state = AcceptorState.PAUSED;
@@ -81,13 +85,15 @@ public class Acceptor<U> implements Runnable {
                     // Ignore
                 }
             }
-            // 有可能取消暂停了, 但是也取消运行了, 所以这边做个判断, endpoint停止后退出循序
+            // 有可能取消暂停了, 但是也取消运行了, 所以这边做个判断, endpoint停止后退出循环
             if (!endpoint.isRunning()) {
                 break;
             }
+            // 重新修改Acceptor状态为运行中
             state = AcceptorState.RUNNING;
             try {
                 // LimitLatch组件, 如果达到最大连接数, Acceptor会在这里阻塞, 等待之前连接释放.
+                // 操作系统底层还是会接受TCP连接, 但是在上层不会再处理这个Socket
                 endpoint.countUpOrAwaitConnection();
 
                 // 有可能 Acceptor 在达到最大连接数阻塞等待期间, 如果被停止了, 需要结束当次循环, 重新进入判断
@@ -95,15 +101,17 @@ public class Acceptor<U> implements Runnable {
                     continue;
                 }
 
-                U socket = null;
+                U socket;
                 try {
                     // 在这里等待客户端连接, 不同的I/O模型有不同的Socket实现.
+                    // Nio方式通过：ServerSocketChannel.accept();
+                    // Aio方式通过：AsynchronousServerSocketChannel.accept().get()
                     socket = endpoint.serverSocketAccept();
                 } catch (Exception ioe) {
-                    // We didn't get a socket
+                    // 如果获取Socket失败, 先对 LimitLatch 的计数减一
                     endpoint.countDownConnection();
+                    // 如果 endpoint 处于运行状态, 判断是否需要延迟
                     if (endpoint.isRunning()) {
-                        // Introduce delay if necessary
                         errorDelay = handleExceptionWithDelay(errorDelay);
                         // re-throw
                         throw ioe;
@@ -116,8 +124,8 @@ public class Acceptor<U> implements Runnable {
 
                 // 配置 Socket 对象
                 if (endpoint.isRunning() && !endpoint.isPaused()) {
-                    // 如果成功, setSocketOptions()会将Socket移交给适当的处理器. 注意：这个方法是异步的, 如果进入了Servlet容器, 那就会返回true
-                    // 所以请求就是从这边开始处理的~
+                    // 如果成功, setSocketOptions()会将Socket移交给适当的处理器. 注意：这个方法是异步的,
+                    // 如果进入了Servlet容器, 那就会返回true, 所以Tomcat处理请求就是从这边开始处理的~~~
                     if (!endpoint.setSocketOptions(socket)) {
                         endpoint.closeSocket(socket);
                     }
@@ -128,8 +136,7 @@ public class Acceptor<U> implements Runnable {
             } catch (Throwable t) {
                 ExceptionUtils.handleThrowable(t);
                 String msg = sm.getString("endpoint.accept.fail");
-                // APR specific.
-                // Could push this down but not sure it is worth the trouble.
+                // APR specific. Could push this down but not sure it is worth the trouble.
                 if (t instanceof Error) {
                     Error e = (Error) t;
                     if (e.getError() == 233) {
@@ -141,10 +148,11 @@ public class Acceptor<U> implements Runnable {
                         log.error(msg, t);
                     }
                 } else {
-                        log.error(msg, t);
+                    log.error(msg, t);
                 }
             }
-        }
+        } // -- while循环end
+
         // 循环一旦退出, Acceptor就会被置为ENDED状态
         state = AcceptorState.ENDED;
     }
@@ -157,7 +165,7 @@ public class Acceptor<U> implements Runnable {
      * files is reached.
      *
      * @param currentErrorDelay The current delay being applied on failure
-     * @return  The delay to apply on the next failure
+     * @return The delay to apply on the next failure
      */
     protected int handleExceptionWithDelay(int currentErrorDelay) {
         // Don't delay on first exception
@@ -168,7 +176,6 @@ public class Acceptor<U> implements Runnable {
                 // Ignore
             }
         }
-
         // On subsequent exceptions, start the delay at 50ms, doubling the delay
         // on every subsequent exception until the delay reaches 1.6 seconds.
         if (currentErrorDelay == 0) {

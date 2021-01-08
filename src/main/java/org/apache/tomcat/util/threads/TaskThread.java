@@ -33,8 +33,7 @@ public class TaskThread extends Thread {
         this.creationTime = System.currentTimeMillis();
     }
 
-    public TaskThread(ThreadGroup group, Runnable target, String name,
-            long stackSize) {
+    public TaskThread(ThreadGroup group, Runnable target, String name, long stackSize) {
         super(group, new WrappingRunnable(target), name, stackSize);
         this.creationTime = System.currentTimeMillis();
     }
@@ -51,10 +50,13 @@ public class TaskThread extends Thread {
      * instead of letting it go and potentially trigger a break in a debugger.
      */
     private static class WrappingRunnable implements Runnable {
-        private Runnable wrappedRunnable;
+
         WrappingRunnable(Runnable wrappedRunnable) {
             this.wrappedRunnable = wrappedRunnable;
         }
+
+        private Runnable wrappedRunnable;
+
         @Override
         public void run() {
             try {

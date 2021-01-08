@@ -38,9 +38,7 @@ public abstract class AbstractProcessorLight implements Processor {
 
 
     @Override
-    public SocketState process(SocketWrapperBase<?> socketWrapper, SocketEvent status)
-            throws IOException {
-
+    public SocketState process(SocketWrapperBase<?> socketWrapper, SocketEvent status) throws IOException {
         SocketState state = SocketState.CLOSED;
         Iterator<DispatchType> dispatches = null;
         do {
